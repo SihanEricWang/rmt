@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BIPH Rate My Professor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>BIPH 课程/老师匿名评价</h1>
+    <p class="sub">不需登录（按浏览器设备令牌限流），评价默认需审核后公开。</p>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <h2>老师列表</h2>
+      <div class="row">
+        <input id="q" placeholder="搜索老师姓名..." />
+        <button id="refresh">刷新</button>
+      </div>
+      <div id="profList" class="list"></div>
+    </section>
+
+    <section class="card">
+      <h2 id="profTitle">选择一位老师查看</h2>
+      <div id="profStats" class="stats"></div>
+      <div id="reviews" class="reviews"></div>
+    </section>
+
+    <section class="card">
+      <h2>提交评价（会进审核）</h2>
+      <div class="grid">
+        <label>老师
+          <select id="profSelect"></select>
+        </label>
+
+        <label>课程
+          <select id="courseSelect"></select>
+        </label>
+
+        <label>综合评分（1-5）
+          <select id="rOverall">
+            <option>5</option><option>4</option><option>3</option><option>2</option><option>1</option>
+          </select>
+        </label>
+
+        <label>难度（1-5，可选）
+          <select id="rDiff">
+            <option value="">(不填)</option>
+            <option>5</option><option>4</option><option>3</option><option>2</option><option>1</option>
+          </select>
+        </label>
+
+        <label>作业量（1-5，可选）
+          <select id="rWork">
+            <option value="">(不填)</option>
+            <option>5</option><option>4</option><option>3</option><option>2</option><option>1</option>
+          </select>
+        </label>
+
+        <label class="full">评论（<=1000字）
+          <textarea id="comment" rows="4" placeholder="尽量写具体：上课方式/作业/考试/给分等，禁止人身攻击与隐私信息。"></textarea>
+        </label>
+      </div>
+
+      <button id="submit">提交（匿名）</button>
+      <p id="msg" class="msg"></p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
