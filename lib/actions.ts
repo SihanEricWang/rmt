@@ -179,3 +179,59 @@ export async function createReview(formData: FormData) {
   revalidatePath(`/professor/${teacherId}`);
   redirect(`/professor/${teacherId}#ratings`);
 }
+
+// lib/actions.ts (append)
+"use server";
+
+import { createSupabaseServerClient } from "./supabase";
+
+const ALLOWED_DOMAIN = "@basischina.com";
+
+function clean(s: FormDataEntryValue | null) {
+  return String(s ?? "").trim();
+}
+
+export async function setReviewVote(formData: FormData) {
+  const teacherId = clean(formData.get("teacherId"));
+  const reviewId = clean(formData.get("reviewId"));
+  const op = clean(formData.get("op")) as "up" | "down" | "clear";
+
+  const supabase = createSupabaseServerClient();
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) {
+    // client will redirect via login link normally; keep it strict anyway
+    throw new Error("Not authenticated");
+  }
+  if (user.email && !user.email.toLowerCase().endsWith(ALLOWED_DOMAIN)) {
+    throw new Error("Only internal emails are allowed.");
+  }
+
+  if (!teacherId || !reviewId) throw new Error("Missing teacherId or reviewId.");
+
+  if (op === "clear") {
+    const { error } = await supabase
+      .from("review_votes")
+      .delete()
+      .eq("review_id", reviewId)
+      .eq("user_id", user.id);
+
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  }
+
+  const vote = op === "up" ? 1 : -1;
+
+  const { error } = await supabase.from("review_votes").upsert(
+    {
+      review_id: reviewId,
+      user_id: user.id,
+      vote,
+    },
+    { onConflict: "review_id,user_id" }
+  );
+
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
