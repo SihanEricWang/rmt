@@ -235,3 +235,123 @@ export async function setReviewVote(formData: FormData) {
   if (error) throw new Error(error.message);
   return { ok: true };
 }
+// lib/actions.ts (append)
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createSupabaseServerClient } from "./supabase";
+
+export async function updateMyReview(formData: FormData) {
+  const supabase = createSupabaseServerClient();
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) redirect(`/login?redirectTo=${encodeURIComponent("/me/ratings")}`);
+
+  // internal email only
+  if (user.email && !user.email.toLowerCase().endsWith("@basischina.com")) {
+    redirect(`/me/ratings?error=${encodeURIComponent("Only internal emails are allowed.")}`);
+  }
+
+  const reviewId = String(formData.get("reviewId") ?? "").trim();
+  if (!reviewId) redirect(`/me/ratings?error=${encodeURIComponent("Missing review id.")}`);
+
+  const teacherId = String(formData.get("teacherId") ?? "").trim(); // for revalidate/redirect safety
+  const quality = Number(String(formData.get("quality") ?? "0"));
+  const difficulty = Number(String(formData.get("difficulty") ?? "0"));
+  const wouldTakeAgain = String(formData.get("wouldTakeAgain") ?? "").trim().toLowerCase();
+  const course = String(formData.get("course") ?? "").trim();
+  const grade = String(formData.get("grade") ?? "").trim();
+  const isOnline = String(formData.get("isOnline") ?? "").trim() === "1";
+
+  const tagsRaw = String(formData.get("tags") ?? "").trim();
+  const tags = tagsRaw
+    ? tagsRaw
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .slice(0, 10)
+        .map((t) => t.toUpperCase())
+    : [];
+
+  const comment = String(formData.get("comment") ?? "").trim();
+
+  // validations
+  if (!Number.isFinite(quality) || quality < 1 || quality > 5) {
+    redirect(`/me/ratings/${reviewId}/edit?error=${encodeURIComponent("Quality must be 1-5.")}`);
+  }
+  if (!Number.isFinite(difficulty) || difficulty < 1 || difficulty > 5) {
+    redirect(`/me/ratings/${reviewId}/edit?error=${encodeURIComponent("Difficulty must be 1-5.")}`);
+  }
+  if (wouldTakeAgain !== "yes" && wouldTakeAgain !== "no") {
+    redirect(`/me/ratings/${reviewId}/edit?error=${encodeURIComponent("Would take again is required.")}`);
+  }
+  if (!course) {
+    redirect(`/me/ratings/${reviewId}/edit?error=${encodeURIComponent("Course code is required.")}`);
+  }
+  if (comment.length > 1200) {
+    redirect(`/me/ratings/${reviewId}/edit?error=${encodeURIComponent("Comment is too long (max 1200).")}`);
+  }
+
+  // update (only if owner; enforced by RLS + extra eq)
+  const { data: updated, error } = await supabase
+    .from("reviews")
+    .update({
+      quality: Math.trunc(quality),
+      difficulty: Math.trunc(difficulty),
+      would_take_again: wouldTakeAgain === "yes",
+      course: course || null,
+      grade: grade || null,
+      is_online: isOnline,
+      tags,
+      comment: comment || null,
+    })
+    .eq("id", reviewId)
+    .eq("user_id", user.id)
+    .select("teacher_id")
+    .maybeSingle();
+
+  if (error || !updated) {
+    redirect(`/me/ratings/${reviewId}/edit?error=${encodeURIComponent(error?.message ?? "Update failed.")}`);
+  }
+
+  revalidatePath("/me/ratings");
+  revalidatePath(`/professor/${updated.teacher_id}`);
+  if (teacherId) revalidatePath(`/teacher/${teacherId}`);
+
+  redirect(`/me/ratings?message=${encodeURIComponent("Rating updated.")}`);
+}
+
+export async function deleteMyReview(formData: FormData) {
+  const supabase = createSupabaseServerClient();
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) redirect(`/login?redirectTo=${encodeURIComponent("/me/ratings")}`);
+
+  if (user.email && !user.email.toLowerCase().endsWith("@basischina.com")) {
+    redirect(`/me/ratings?error=${encodeURIComponent("Only internal emails are allowed.")}`);
+  }
+
+  const reviewId = String(formData.get("reviewId") ?? "").trim();
+  if (!reviewId) redirect(`/me/ratings?error=${encodeURIComponent("Missing review id.")}`);
+
+  const { data: deleted, error } = await supabase
+    .from("reviews")
+    .delete()
+    .eq("id", reviewId)
+    .eq("user_id", user.id)
+    .select("teacher_id")
+    .maybeSingle();
+
+  if (error || !deleted) {
+    redirect(`/me/ratings?error=${encodeURIComponent(error?.message ?? "Delete failed.")}`);
+  }
+
+  revalidatePath("/me/ratings");
+  revalidatePath(`/professor/${deleted.teacher_id}`);
+  revalidatePath(`/teacher/${deleted.teacher_id}`);
+
+  redirect(`/me/ratings?message=${encodeURIComponent("Rating deleted.")}`);
+}
