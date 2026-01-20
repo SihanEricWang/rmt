@@ -1,4 +1,4 @@
-// app/professor/[id]/page.tsx
+// app/teacher/[id]/page.tsx
 import { notFound } from "next/navigation";
 import ReviewForm from "@/components/ReviewForm";
 import { createSupabaseServerClient } from "@/lib/supabase";
@@ -309,4 +309,63 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
                 <div key={r.id} className="rounded-2xl border bg-white shadow-sm">
                   <div className="flex gap-6 p-6">
                     {/* left quality box */}
-                    <div className="w-28 shrink-0 text-center"
+                    <div className="w-28 shrink-0 text-center">
+                      <div className="text-xs font-semibold tracking-wide text-neutral-700">QUALITY</div>
+                      <div className={`mt-2 rounded-xl px-3 py-5 ${ratingClass(r.quality)}`}>
+                        <div className="text-4xl font-extrabold leading-none">{Number(r.quality).toFixed(1)}</div>
+                      </div>
+                    </div>
+
+                    {/* content */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="text-sm font-extrabold tracking-wide text-neutral-900">
+                          {r.course ? String(r.course).toUpperCase() : "—"}
+                        </div>
+                        <div className="text-sm text-neutral-500">{formatDate(r.created_at)}</div>
+                      </div>
+
+                      <div className="mt-2 text-sm text-neutral-800">
+                        <span className="font-semibold">Would take again:</span>{" "}
+                        {r.would_take_again ? "Yes" : "No"}
+                        <span className="mx-2 text-neutral-300">|</span>
+                        <span className="font-semibold">Difficulty:</span> {r.difficulty}/5
+                      </div>
+
+                      {Array.isArray(r.tags) && r.tags.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {r.tags.map((t: string) => (
+                            <span
+                              key={t}
+                              className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-800"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {r.comment ? (
+                        <p className="mt-4 whitespace-pre-wrap text-sm text-neutral-800">{r.comment}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Review form */}
+          <div className="mt-10">
+            <ReviewForm
+              teacherId={teacherId}
+              isAuthed={isAuthed}
+              redirectTo={`/professor/${teacherId}#rate`}
+              suggestedTags={topTags}
+            />
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
