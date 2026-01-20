@@ -26,7 +26,7 @@ export default function ProfessorCard({ teacher }: { teacher: TeacherListItem })
 
   return (
     <Link
-      href={`/professor/${teacher.id}`}
+      href={`/teacher/${teacher.id}`}
       className="block rounded-2xl border bg-white shadow-sm transition hover:shadow-md"
     >
       <div className="flex gap-6 p-6">
