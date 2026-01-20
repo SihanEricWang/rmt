@@ -1,88 +1,106 @@
-// lib/actions.ts
+// lib/actions.ts (createReview)
 "use server";
 
-import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "./supabase";
 
 const ALLOWED_DOMAIN = "@basischina.com";
 
-function normalizeEmail(raw: FormDataEntryValue | null): string {
-  return String(raw ?? "").trim().toLowerCase();
+function clean(s: FormDataEntryValue | null) {
+  return String(s ?? "").trim();
 }
 
-function readString(raw: FormDataEntryValue | null): string {
-  return String(raw ?? "").trim();
+function parseIntSafe(v: string) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.trunc(n);
 }
 
-function ensureAllowedEmail(email: string) {
-  if (!email.endsWith(ALLOWED_DOMAIN)) {
-    throw new Error(`Only internal email addresses (${ALLOWED_DOMAIN}) are allowed.`);
+export async function createReview(formData: FormData) {
+  const teacherId = clean(formData.get("teacherId"));
+
+  const quality = parseIntSafe(clean(formData.get("quality")));
+  const difficulty = parseIntSafe(clean(formData.get("difficulty")));
+
+  const wouldTakeAgainRaw = clean(formData.get("wouldTakeAgain")).toLowerCase();
+  const would_take_again = wouldTakeAgainRaw === "yes";
+
+  const course = clean(formData.get("course")); // course code
+  const grade = clean(formData.get("grade"));
+  const isOnline = clean(formData.get("isOnline")) === "1";
+
+  const requireCourse = clean(formData.get("requireCourse")) === "1";
+  const requireComment = clean(formData.get("requireComment")) === "1";
+  const maxTags = Math.min(10, Math.max(0, Number(clean(formData.get("maxTags")) || 10)));
+  const commentLimit = Math.min(1200, Math.max(50, Number(clean(formData.get("commentLimit")) || 1200)));
+
+  const comment = clean(formData.get("comment"));
+
+  const tagsRaw = clean(formData.get("tags"));
+  const tags = tagsRaw
+    ? tagsRaw
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .slice(0, maxTags)
+        .map((t) => t.toUpperCase())
+    : [];
+
+  const supabase = createSupabaseServerClient();
+  const { data: userData } = await supabase.auth.getUser();
+
+  const user = userData.user;
+  if (!user) {
+    redirect(`/login?error=${encodeURIComponent("Please sign in to post a review.")}`);
   }
-}
-
-export async function signInWithPassword(formData: FormData) {
-  const email = normalizeEmail(formData.get("email"));
-  const password = readString(formData.get("password"));
-  const redirectTo = readString(formData.get("redirectTo")) || "/teachers";
-
-  try {
-    if (!email || !password) throw new Error("Please enter your email and password.");
-    ensureAllowedEmail(email);
-
-    const supabase = createSupabaseServerClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) throw new Error(error.message);
-
-    redirect(redirectTo);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Sign in failed.";
-    redirect(`/login?error=${encodeURIComponent(msg)}`);
+  if (user.email && !user.email.toLowerCase().endsWith(ALLOWED_DOMAIN)) {
+    redirect(`/login?error=${encodeURIComponent("Only internal emails are allowed.")}`);
   }
-}
 
-export async function signUpWithEmailAndPassword(formData: FormData) {
-  const email = normalizeEmail(formData.get("email"));
-  const password = readString(formData.get("password"));
-  const confirmPassword = readString(formData.get("confirmPassword"));
+  if (!teacherId) redirect(`/teachers?error=${encodeURIComponent("Missing teacher id.")}`);
+  if (!quality || quality < 1 || quality > 5)
+    redirect(`/professor/${teacherId}?error=${encodeURIComponent("Invalid quality.")}`);
+  if (!difficulty || difficulty < 1 || difficulty > 5)
+    redirect(`/professor/${teacherId}?error=${encodeURIComponent("Invalid difficulty.")}`);
 
-  try {
-    if (!email || !password) throw new Error("Please enter your email and password.");
-    ensureAllowedEmail(email);
+  if (requireCourse && !course) {
+    redirect(`/professor/${teacherId}/rate?error=${encodeURIComponent("Course code is required.")}`);
+  }
 
-    if (password.length < 8) throw new Error("Password must be at least 8 characters.");
-    if (password !== confirmPassword) throw new Error("Passwords do not match.");
+  if (requireComment && !comment) {
+    redirect(`/professor/${teacherId}/rate?error=${encodeURIComponent("Review text is required.")}`);
+  }
 
-    const supabase = createSupabaseServerClient();
-
-    const origin = headers().get("origin") ?? "";
-    const emailRedirectTo = `${origin}/auth/callback`;
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo },
-    });
-
-    if (error) throw new Error(error.message);
-
+  if (comment.length > commentLimit) {
     redirect(
-      `/login?message=${encodeURIComponent(
-        "Account created. Please check your email to verify your address, then sign in."
+      `/professor/${teacherId}/rate?error=${encodeURIComponent(
+        `Review is too long (max ${commentLimit} characters).`
       )}`
     );
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Sign up failed.";
-    redirect(`/login?error=${encodeURIComponent(msg)}`);
   }
+
+  const { error } = await supabase.from("reviews").insert({
+    teacher_id: teacherId,
+    user_id: user.id,
+    quality,
+    difficulty,
+    would_take_again,
+    comment: comment || null,
+    tags,
+    course: course || null,
+    grade: grade || null,
+    is_online: isOnline,
+  });
+
+  if (error) {
+    redirect(`/professor/${teacherId}/rate?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/professor/${teacherId}`);
+  redirect(`/professor/${teacherId}#ratings`);
 }
 
-export async function signOut() {
-  const supabase = createSupabaseServerClient();
-  await supabase.auth.signOut();
-  redirect("/login?message=" + encodeURIComponent("You have been signed out."));
-}
 
 
 // lib/actions.ts
