@@ -5,12 +5,12 @@ type LoginPageProps = {
   searchParams?: {
     message?: string;
     error?: string;
+    redirectTo?: string;
   };
 };
 
 function Alert({ kind, text }: { kind: "error" | "message"; text: string }) {
-  const base =
-    "w-full rounded-lg border px-4 py-3 text-sm leading-5";
+  const base = "w-full rounded-lg border px-4 py-3 text-sm leading-5";
   const cls =
     kind === "error"
       ? `${base} border-red-300 bg-red-50 text-red-800`
@@ -22,6 +22,9 @@ function Alert({ kind, text }: { kind: "error" | "message"; text: string }) {
 export default function LoginPage({ searchParams }: LoginPageProps) {
   const message = searchParams?.message;
   const error = searchParams?.error;
+
+  // ✅ important: allow redirect back to the page that required auth
+  const redirectTo = searchParams?.redirectTo ?? "/teachers";
 
   return (
     <main className="min-h-screen bg-neutral-50">
@@ -54,7 +57,8 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
               </p>
 
               <form action={signInWithPassword} className="mt-5 space-y-4">
-                <input type="hidden" name="redirectTo" value="/teachers" />
+                {/* ✅ redirect after sign-in */}
+                <input type="hidden" name="redirectTo" value={redirectTo} />
 
                 <label className="block">
                   <span className="text-sm font-medium">Email</span>
@@ -154,8 +158,8 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
           </div>
 
           <p className="mt-6 text-xs text-neutral-500">
-            Tip: In Supabase Auth settings, make sure Email confirmations are enabled and Redirect URLs include{" "}
-            <span className="font-mono">/auth/callback</span>.
+            Supabase setup reminder: enable Email confirmations and add{" "}
+            <span className="font-mono">/auth/callback</span> to Redirect URLs.
           </p>
         </div>
       </div>
