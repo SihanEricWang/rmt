@@ -1,12 +1,11 @@
-// TypeScript definitions placeholder
-export type Professor = {
+// types/index.ts
+export type TeacherListItem = {
   id: string;
-  name: string;
-};
+  full_name: string;
+  subject: string | null;
 
-export type Review = {
-  id: string;
-  professorId: string;
-  rating: number;
-  comment?: string;
+  avg_quality: number | null;
+  review_count: number;
+  pct_would_take_again: number | null;
+  avg_difficulty: number | null;
 };
