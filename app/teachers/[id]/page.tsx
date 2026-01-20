@@ -203,14 +203,14 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
             <div className="mt-8 flex gap-4">
               {isAuthed ? (
                 <a
-                  href="#rate"
+                  href={`/professor/${teacherId}/rate`}
                   className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white hover:opacity-90"
                 >
                   Rate <span className="ml-2">→</span>
                 </a>
               ) : (
                 <a
-                  href={`/login?redirectTo=${encodeURIComponent(`/professor/${teacherId}#rate`)}`}
+                  href={`/login?redirectTo=${encodeURIComponent(`/professor/${teacherId}/rate`)}`}
                   className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white hover:opacity-90"
                 >
                   Rate <span className="ml-2">→</span>
