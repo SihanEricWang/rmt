@@ -355,3 +355,9 @@ export async function deleteMyReview(formData: FormData) {
 
   redirect(`/me/ratings?message=${encodeURIComponent("Rating deleted.")}`);
 }
+export async function signOut() {
+  "use server";
+  const supabase = createSupabaseServerClient();
+  await supabase.auth.signOut();
+  redirect("/teachers");
+}
