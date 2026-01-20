@@ -1,4 +1,4 @@
-// components/ProfessorCard.tsx
+// components/TeacherCard.tsx
 import Link from "next/link";
 import type { TeacherListItem } from "@/types";
 
@@ -20,13 +20,13 @@ function fmtPct(n: number | null) {
   return `${Math.round(n)}%`;
 }
 
-export default function ProfessorCard({ teacher }: { teacher: TeacherListItem }) {
+export default function TeacherCard({ teacher }: { teacher: TeacherListItem }) {
   const avg = teacher.avg_quality;
   const count = teacher.review_count ?? 0;
 
   return (
     <Link
-      href={`/teacher/${teacher.id}`}
+      href={`/teachers/${teacher.id}`}
       className="block rounded-2xl border bg-white shadow-sm transition hover:shadow-md"
     >
       <div className="flex gap-6 p-6">
@@ -38,9 +38,7 @@ export default function ProfessorCard({ teacher }: { teacher: TeacherListItem })
             <div className="text-4xl font-extrabold leading-none">{fmt1(avg)}</div>
           </div>
 
-          <div className="mt-2 text-sm text-neutral-600">
-            {count === 0 ? "No ratings" : `${count} ratings`}
-          </div>
+          <div className="mt-2 text-sm text-neutral-600">{count === 0 ? "No ratings" : `${count} ratings`}</div>
         </div>
 
         {/* MIDDLE: details */}
