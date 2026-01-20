@@ -28,7 +28,7 @@ export default async function TeachersPage({ searchParams }: PageProps) {
   const q = (searchParams?.q ?? "").trim();
   const subject = (searchParams?.subject ?? "").trim();
 
-  // pagination (optional; not shown in screenshot, but safe default)
+  // pagination
   const pageSize = 10;
   const page = Math.max(1, Number(searchParams?.page ?? "1") || 1);
   const from = (page - 1) * pageSize;
@@ -44,7 +44,7 @@ export default async function TeachersPage({ searchParams }: PageProps) {
     new Set((subjectRows ?? []).map((r) => r.subject).filter(Boolean) as string[])
   );
 
-  // fetch teacher list (from a VIEW we will create in Supabase SQL)
+  // fetch teacher list (aggregated view)
   let queryBuilder = supabase
     .from("teacher_list")
     .select(
@@ -58,31 +58,52 @@ export default async function TeachersPage({ searchParams }: PageProps) {
   if (subject) queryBuilder = queryBuilder.eq("subject", subject);
 
   const { data, error, count } = await queryBuilder;
-
   const teachers = (data ?? []) as TeacherListItem[];
+
+  const qsBase = new URLSearchParams({
+    ...(q ? { q } : {}),
+    ...(subject ? { subject } : {}),
+  });
 
   return (
     <main className="min-h-screen bg-neutral-50">
-      {/* TOP BAR */}
+      {/* TOP NAV (match your screenshot style) */}
       <header className="bg-black text-white">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <div className="flex items-center gap-4">
-            <div className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black">
-              RMT
-            </div>
-            <div className="text-sm font-semibold tracking-wide">
-              teachers at <span className="underline decoration-white/40 underline-offset-2">biph</span>
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
+          <a
+            href="/teachers"
+            className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black"
+          >
+            RMT
+          </a>
+
+          <div className="hidden items-center gap-3 md:flex">
+            <div className="text-sm font-semibold">Teachers</div>
+            {/* top search that goes to /teachers?q=... */}
+            <form action="/teachers" className="relative">
+              <input
+                name="q"
+                defaultValue={q}
+                placeholder="Teacher name"
+                className="h-9 w-[380px] rounded-full bg-white/10 px-4 text-sm outline-none placeholder:text-white/60 focus:bg-white/15"
+              />
+              {/* keep subject if present */}
+              {subject ? <input type="hidden" name="subject" value={subject} /> : null}
+            </form>
+
+            <div className="text-sm text-white/70">at</div>
+            <div className="text-sm font-semibold underline underline-offset-2 decoration-white/40">
+              BIPH
             </div>
           </div>
 
-          <div className="text-sm font-extrabold tracking-wide">
-            HEY, {heyName}
-          </div>
+          <div className="ml-auto text-sm font-extrabold tracking-wide">HEY, {heyName}</div>
         </div>
       </header>
 
       {/* CONTENT */}
       <div className="mx-auto max-w-6xl px-4 py-10">
+        {/* big search + Any dropdown (as in screenshot body) */}
         <SearchBar subjects={subjects} />
 
         <div className="mt-8 text-2xl font-medium tracking-tight">
@@ -106,14 +127,15 @@ export default async function TeachersPage({ searchParams }: PageProps) {
           )}
         </div>
 
-        {/* simple pagination links (optional) */}
+        {/* pagination */}
         {count !== null && count > pageSize ? (
           <div className="mt-10 flex items-center justify-between text-sm">
             <a
-              className={`rounded-lg border px-4 py-2 ${page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-white"}`}
+              className={`rounded-lg border px-4 py-2 ${
+                page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-white"
+              }`}
               href={`/teachers?${new URLSearchParams({
-                ...(q ? { q } : {}),
-                ...(subject ? { subject } : {}),
+                ...Object.fromEntries(qsBase.entries()),
                 page: String(page - 1),
               }).toString()}`}
             >
@@ -126,11 +148,12 @@ export default async function TeachersPage({ searchParams }: PageProps) {
 
             <a
               className={`rounded-lg border px-4 py-2 ${
-                page >= Math.ceil(count / pageSize) ? "pointer-events-none opacity-40" : "hover:bg-white"
+                page >= Math.ceil(count / pageSize)
+                  ? "pointer-events-none opacity-40"
+                  : "hover:bg-white"
               }`}
               href={`/teachers?${new URLSearchParams({
-                ...(q ? { q } : {}),
-                ...(subject ? { subject } : {}),
+                ...Object.fromEntries(qsBase.entries()),
                 page: String(page + 1),
               }).toString()}`}
             >
