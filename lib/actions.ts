@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "./supabase";
+import { createSupabaseServerActionClient } from "./supabase";
 
 const ALLOWED_DOMAIN_SUFFIX = "@basischina.com";
 
@@ -62,7 +62,8 @@ function teacherRatePage(teacherId: string) {
 }
 
 async function requireInternalUserOrRedirect(redirectTo?: string) {
-  const supabase = createSupabaseServerClient();
+  // ✅ Server Action client: allowed to set cookies (refresh/sign-in/out)
+  const supabase = createSupabaseServerActionClient();
   const { data } = await supabase.auth.getUser();
   const user = data.user;
 
@@ -99,7 +100,7 @@ export async function signInWithPassword(formData: FormData) {
     );
   }
 
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseServerActionClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
@@ -133,7 +134,7 @@ export async function signUpWithEmailAndPassword(formData: FormData) {
   const host = h.get("x-forwarded-host") ?? h.get("host");
   const origin = host ? `${proto}://${host}` : null;
 
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseServerActionClient();
   const { error } = await supabase.auth.signUp({
     email,
     password,
@@ -148,7 +149,7 @@ export async function signUpWithEmailAndPassword(formData: FormData) {
 }
 
 export async function signOut() {
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseServerActionClient();
   await supabase.auth.signOut();
   redirect("/teachers");
 }
@@ -168,7 +169,7 @@ export async function createReview(formData: FormData) {
   const would_take_again = wouldTakeAgainRaw === "yes" ? true : wouldTakeAgainRaw === "no" ? false : null;
 
   // optional metadata
-  const course = str(formData.get("course"));
+  const course = str(formData.get("course")); // ✅ front-end 的 subject 会写到这里
   const grade = str(formData.get("grade"));
   const isOnline = bool01(getLast(formData, "isOnline"));
   const comment = str(formData.get("comment"));
@@ -191,10 +192,11 @@ export async function createReview(formData: FormData) {
 
   if (!teacherId) redirect(`/teachers?error=${encodeURIComponent("Missing teacher id.")}`);
   if (quality === null) redirect(`${teacherRatePage(teacherId)}?error=${encodeURIComponent("Quality must be 1-5.")}`);
-  if (difficulty === null) redirect(`${teacherRatePage(teacherId)}?error=${encodeURIComponent("Difficulty must be 1-5.")}`);
+  if (difficulty === null)
+    redirect(`${teacherRatePage(teacherId)}?error=${encodeURIComponent("Difficulty must be 1-5.")}`);
 
   if (requireCourse && !course) {
-    redirect(`${teacherRatePage(teacherId)}?error=${encodeURIComponent("Course code is required.")}`);
+    redirect(`${teacherRatePage(teacherId)}?error=${encodeURIComponent("Subject is required.")}`);
   }
   if (requireComment && !comment) {
     redirect(`${teacherRatePage(teacherId)}?error=${encodeURIComponent("Review text is required.")}`);
@@ -239,7 +241,7 @@ export async function updateMyReview(formData: FormData) {
   const quality = intInRange(str(formData.get("quality")), 1, 5);
   const difficulty = intInRange(str(formData.get("difficulty")), 1, 5);
   const wouldTakeAgain = str(formData.get("wouldTakeAgain")).toLowerCase();
-  const course = str(formData.get("course"));
+  const course = str(formData.get("course")); // ✅ subject 存这里
   const grade = str(formData.get("grade"));
   const isOnline = bool01(getLast(formData, "isOnline"));
   const comment = str(formData.get("comment"));
@@ -262,7 +264,7 @@ export async function updateMyReview(formData: FormData) {
     redirect(`${editPath}?error=${encodeURIComponent("Would take again is required.")}`);
   }
   if (!course) {
-    redirect(`${editPath}?error=${encodeURIComponent("Course code is required.")}`);
+    redirect(`${editPath}?error=${encodeURIComponent("Subject is required.")}`);
   }
   if (comment.length > 1200) {
     redirect(`${editPath}?error=${encodeURIComponent("Comment is too long (max 1200).")}`);
