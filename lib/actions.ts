@@ -24,7 +24,8 @@ function getLast(formData: FormData, key: string): string {
 function num(v: string): number | null {
   if (v === "") return null;
   const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n)) return null;
+  return n;
 }
 
 function intInRange(v: string, min: number, max: number): number | null {
@@ -36,33 +37,38 @@ function intInRange(v: string, min: number, max: number): number | null {
 }
 
 function bool01(v: string): boolean {
-  return v === "1" || v.toLowerCase() === "true" || v.toLowerCase() === "yes" || v.toLowerCase() === "on";
+  return v === "1" || v.toLowerCase() === "true";
 }
 
-function isAllowedEmail(email?: string | null) {
+function isAllowedEmail(email?: string | null): boolean {
   if (!email) return false;
   return email.toLowerCase().endsWith(ALLOWED_DOMAIN_SUFFIX);
 }
 
+/** Prevent open-redirects: only allow same-site relative paths. */
+function safeRedirectPath(p: string, fallback = "/teachers"): string {
+  const s = (p || "").trim();
+  if (!s.startsWith("/")) return fallback;
+  if (s.startsWith("//")) return fallback;
+  if (s.includes("\\") || s.includes("\n") || s.includes("\r")) return fallback;
+  return s;
+}
+
 function teacherPage(teacherId: string) {
-  return `/teachers/${teacherId}`;
+  return `/teachers/${encodeURIComponent(teacherId)}`;
 }
-
 function teacherRatePage(teacherId: string) {
-  return `/teachers/${teacherId}/rate`;
+  return `/teachers/${encodeURIComponent(teacherId)}/rate`;
 }
 
-function myReviewEditPage(reviewId: string) {
-  return `/me/ratings/${reviewId}/edit`;
-}
-
-async function requireUser() {
+async function requireInternalUserOrRedirect(redirectTo?: string) {
   const supabase = createSupabaseServerClient();
   const { data } = await supabase.auth.getUser();
   const user = data.user;
 
   if (!user) {
-    redirect(`/login?error=${encodeURIComponent("Please sign in.")}`);
+    const dest = redirectTo ? `/login?redirectTo=${encodeURIComponent(redirectTo)}` : "/login";
+    redirect(dest);
   }
 
   if (!isAllowedEmail(user.email)) {
@@ -80,65 +86,75 @@ export async function signInWithPassword(formData: FormData) {
   const password = str(formData.get("password"));
   const redirectToRaw = str(formData.get("redirectTo"));
 
-  if (!email || !password) {
-    redirect(`/login?error=${encodeURIComponent("Email and password are required.")}`);
-  }
+  const redirectTo = safeRedirectPath(redirectToRaw, "/teachers");
 
-  if (!isAllowedEmail(email)) {
-    redirect(`/login?error=${encodeURIComponent("Only internal emails are allowed.")}`);
+  if (!email || !password) {
+    redirect(
+      `/login?error=${encodeURIComponent("Email and password are required.")}&redirectTo=${encodeURIComponent(redirectTo)}`
+    );
+  }
+  if (!email.endsWith(ALLOWED_DOMAIN_SUFFIX)) {
+    redirect(
+      `/login?error=${encodeURIComponent("Only internal emails are allowed.")}&redirectTo=${encodeURIComponent(redirectTo)}`
+    );
   }
 
   const supabase = createSupabaseServerClient();
-
   const { error } = await supabase.auth.signInWithPassword({ email, password });
+
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    redirect(`/login?error=${encodeURIComponent(error.message)}&redirectTo=${encodeURIComponent(redirectTo)}`);
   }
 
-  const redirectTo = redirectToRaw || "/teachers";
   redirect(redirectTo);
 }
 
 export async function signUpWithEmailAndPassword(formData: FormData) {
   const email = str(formData.get("email")).toLowerCase();
   const password = str(formData.get("password"));
-  const redirectToRaw = str(formData.get("redirectTo"));
+  const confirmPassword = str(formData.get("confirmPassword"));
 
   if (!email || !password) {
     redirect(`/login?error=${encodeURIComponent("Email and password are required.")}`);
   }
-
-  if (!isAllowedEmail(email)) {
+  if (!email.endsWith(ALLOWED_DOMAIN_SUFFIX)) {
     redirect(`/login?error=${encodeURIComponent("Only internal emails are allowed.")}`);
   }
+  if (password.length < 8) {
+    redirect(`/login?error=${encodeURIComponent("Password must be at least 8 characters.")}`);
+  }
+  if (password !== confirmPassword) {
+    redirect(`/login?error=${encodeURIComponent("Passwords do not match.")}`);
+  }
+
+  // Build origin for email redirect (best-effort)
+  const h = headers();
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const origin = host ? `${proto}://${host}` : null;
 
   const supabase = createSupabaseServerClient();
-
-  const origin = headers().get("origin") ?? "";
   const { error } = await supabase.auth.signUp({
     email,
     password,
-    options: {
-      emailRedirectTo: `${origin}/auth/callback`,
-    },
+    options: origin ? { emailRedirectTo: `${origin}/auth/callback` } : undefined,
   });
 
   if (error) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`);
   }
 
-  const redirectTo = redirectToRaw || "/teachers";
-  redirect(redirectTo);
+  redirect(`/login?message=${encodeURIComponent("Account created. Please check your email to verify, then sign in.")}`);
 }
 
 export async function signOut() {
   const supabase = createSupabaseServerClient();
   await supabase.auth.signOut();
-  redirect("/login");
+  redirect("/teachers");
 }
 
 // --------------------
-// Reviews (create/update/delete/vote)
+// Reviews
 // --------------------
 export async function createReview(formData: FormData) {
   const teacherId = str(formData.get("teacherId"));
@@ -157,7 +173,7 @@ export async function createReview(formData: FormData) {
   const isOnline = bool01(getLast(formData, "isOnline"));
   const comment = str(formData.get("comment"));
 
-  // server-side constraints (set by forms)
+  // server-enforced knobs (sent by RateForm)
   const requireCourse = bool01(str(formData.get("requireCourse")));
   const requireComment = bool01(str(formData.get("requireComment")));
   const maxTags = Math.min(10, Math.max(0, Math.trunc(num(str(formData.get("maxTags"))) ?? 10)));
@@ -178,7 +194,7 @@ export async function createReview(formData: FormData) {
   if (difficulty === null) redirect(`${teacherRatePage(teacherId)}?error=${encodeURIComponent("Difficulty must be 1-5.")}`);
 
   if (requireCourse && !course) {
-    redirect(`${teacherRatePage(teacherId)}?error=${encodeURIComponent("Subject is required.")}`);
+    redirect(`${teacherRatePage(teacherId)}?error=${encodeURIComponent("Course code is required.")}`);
   }
   if (requireComment && !comment) {
     redirect(`${teacherRatePage(teacherId)}?error=${encodeURIComponent("Review text is required.")}`);
@@ -190,18 +206,18 @@ export async function createReview(formData: FormData) {
   }
 
   // If not provided (older form), default to true to avoid blocking.
-  const would_take_again_safe = would_take_again ?? true;
+  const wta = would_take_again ?? true;
 
-  const { supabase, user } = await requireUser();
+  const { supabase, user } = await requireInternalUserOrRedirect(teacherRatePage(teacherId));
 
   const { error } = await supabase.from("reviews").insert({
     teacher_id: teacherId,
     user_id: user.id,
     quality,
     difficulty,
-    would_take_again: would_take_again_safe,
-    tags,
+    would_take_again: wta,
     comment: comment || null,
+    tags,
     course: course || null,
     grade: grade || null,
     is_online: isOnline,
@@ -238,7 +254,7 @@ export async function updateMyReview(formData: FormData) {
         .map((t) => t.toUpperCase())
     : [];
 
-  const editPath = myReviewEditPage(reviewId);
+  const editPath = `/me/ratings/${encodeURIComponent(reviewId)}/edit`;
 
   if (quality === null) redirect(`${editPath}?error=${encodeURIComponent("Quality must be 1-5.")}`);
   if (difficulty === null) redirect(`${editPath}?error=${encodeURIComponent("Difficulty must be 1-5.")}`);
@@ -246,13 +262,13 @@ export async function updateMyReview(formData: FormData) {
     redirect(`${editPath}?error=${encodeURIComponent("Would take again is required.")}`);
   }
   if (!course) {
-    redirect(`${editPath}?error=${encodeURIComponent("Subject is required.")}`);
+    redirect(`${editPath}?error=${encodeURIComponent("Course code is required.")}`);
   }
   if (comment.length > 1200) {
-    redirect(`${editPath}?error=${encodeURIComponent("Review is too long (max 1200 characters).")}`);
+    redirect(`${editPath}?error=${encodeURIComponent("Comment is too long (max 1200).")}`);
   }
 
-  const { supabase, user } = await requireUser();
+  const { supabase, user } = await requireInternalUserOrRedirect(editPath);
 
   const { data: updated, error } = await supabase
     .from("reviews")
@@ -260,7 +276,7 @@ export async function updateMyReview(formData: FormData) {
       quality,
       difficulty,
       would_take_again: wouldTakeAgain === "yes",
-      course,
+      course: course || null,
       grade: grade || null,
       is_online: isOnline,
       tags,
@@ -277,43 +293,47 @@ export async function updateMyReview(formData: FormData) {
 
   revalidatePath("/me/ratings");
   revalidatePath(teacherPage(updated.teacher_id));
-  redirect(`${teacherPage(updated.teacher_id)}#ratings`);
+  redirect(`/me/ratings?message=${encodeURIComponent("Rating updated.")}`);
 }
 
 export async function deleteMyReview(formData: FormData) {
   const reviewId = str(formData.get("reviewId"));
-  const teacherId = str(formData.get("teacherId"));
-
   if (!reviewId) redirect(`/me/ratings?error=${encodeURIComponent("Missing review id.")}`);
-  if (!teacherId) redirect(`/me/ratings?error=${encodeURIComponent("Missing teacher id.")}`);
 
-  const { supabase, user } = await requireUser();
+  const { supabase, user } = await requireInternalUserOrRedirect("/me/ratings");
 
-  const { error } = await supabase.from("reviews").delete().eq("id", reviewId).eq("user_id", user.id);
+  const { data: deleted, error } = await supabase
+    .from("reviews")
+    .delete()
+    .eq("id", reviewId)
+    .eq("user_id", user.id)
+    .select("teacher_id")
+    .maybeSingle();
 
-  if (error) {
-    redirect(`${teacherPage(teacherId)}?error=${encodeURIComponent(error.message)}`);
+  if (error || !deleted) {
+    redirect(`/me/ratings?error=${encodeURIComponent(error?.message ?? "Delete failed.")}`);
   }
 
   revalidatePath("/me/ratings");
-  revalidatePath(teacherPage(teacherId));
-  redirect(`${teacherPage(teacherId)}#ratings`);
+  revalidatePath(teacherPage(deleted.teacher_id));
+  redirect(`/me/ratings?message=${encodeURIComponent("Rating deleted.")}`);
 }
 
+// --------------------
+// Votes
+// --------------------
 export async function setReviewVote(formData: FormData) {
   const teacherId = str(formData.get("teacherId"));
   const reviewId = str(formData.get("reviewId"));
-  const op = str(formData.get("op")); // up/down/remove
+  const op = str(formData.get("op")) as "up" | "down" | "clear";
 
-  if (!teacherId || !reviewId) {
-    return { ok: false, error: "Missing ids." };
-  }
+  if (!teacherId || !reviewId) throw new Error("Missing teacherId or reviewId.");
+  if (op !== "up" && op !== "down" && op !== "clear") throw new Error("Invalid vote operation.");
 
-  const { supabase, user } = await requireUser();
+  const { supabase, user } = await requireInternalUserOrRedirect(teacherPage(teacherId));
 
-  if (op === "remove") {
+  if (op === "clear") {
     const { error } = await supabase.from("review_votes").delete().eq("review_id", reviewId).eq("user_id", user.id);
-
     if (error) throw new Error(error.message);
 
     revalidatePath(teacherPage(teacherId));
