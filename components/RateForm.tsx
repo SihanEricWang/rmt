@@ -208,16 +208,14 @@ export default function RateForm({
         <div className="text-sm font-semibold">
           Write a Review <span className="text-red-600">*</span>
         </div>
-        <p className="mt-2 text-sm text-neutral-600">
-          Discuss the teacher&apos;s teaching style and ability to convey the material clearly.
-        </p>
+        
 
         <details className="mt-4 rounded-xl border bg-neutral-50 p-4">
           <summary className="cursor-pointer text-sm font-semibold">Guidelines</summary>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-neutral-700">
-            <li>Your rating could be removed if you use profanity or derogatory terms.</li>
-            <li>Don&apos;t claim that the teacher shows bias or favoritism for or against students.</li>
-            <li>Don&apos;t forget to proofread!</li>
+            <li>Harmful ratings could be removed.</li>
+            <li>Fell free to speak.</li>
+            <li>Tell the truth!</li>
           </ul>
         </details>
 
