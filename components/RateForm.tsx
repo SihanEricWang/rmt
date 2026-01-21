@@ -1,219 +1,212 @@
-// components/RateForm.tsx
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import StarRating from "@/components/ui/StarRating";
 import SegmentRating from "@/components/ui/SegmentRating";
 import { createReview } from "@/lib/actions";
 
-const TAG_OPTIONS = [
-  "TOUGH GRADER",
-  "GET READY TO READ",
-  "PARTICIPATION MATTERS",
-  "EXTRA CREDIT",
-  "GROUP PROJECTS",
-  "AMAZING LECTURES",
-  "CLEAR GRADING CRITERIA",
-  "GIVES GOOD FEEDBACK",
-  "INSPIRATIONAL",
-  "LOTS OF HOMEWORK",
-  "HILARIOUS",
-  "BEWARE OF POP QUIZZES",
-  "SO MANY PAPERS",
-  "CARING",
-  "RESPECTED",
-  "LECTURE HEAVY",
-  "TEST HEAVY",
-  "GRADED BY FEW THINGS",
-  "ACCESSIBLE OUTSIDE CLASS",
-  "ONLINE SAVVY",
-];
-
-const GRADE_OPTIONS = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D", "F", "P", "NP"];
-
-export default function RateForm({
-  teacherId,
-  teacherSubject,
-}: {
+type Props = {
   teacherId: string;
-  teacherSubject: string | null;
-}) {
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [comment, setComment] = useState("");
-  const [grade, setGrade] = useState("");
-  const [wouldTakeAgain, setWouldTakeAgain] = useState<"yes" | "no" | "">("");
+  subjectOptions?: string[];
+};
 
-  // ✅ Subject dropdown (single-option from teacher)
-  const subjectValue = (teacherSubject ?? "").trim() || "UNKNOWN";
-  const [subject, setSubject] = useState(subjectValue);
+const DEFAULT_DIFFICULTY_LABELS = ["Easy", "Medium", "Hard"];
+const DEFAULT_ATTENDANCE_LABELS = ["Never", "Sometimes", "Always"];
 
-  const [isPending, startTransition] = useTransition();
+export default function RateForm({ teacherId, subjectOptions = [] }: Props) {
+  const router = useRouter();
 
-  const tagOptions = useMemo(() => TAG_OPTIONS, []);
-  const charLimit = 350;
+  // Subject (stored in DB as `course` for compatibility)
+  const normalizedSubjectOptions = useMemo(() => {
+    const unique = Array.from(new Set(subjectOptions.map((s) => s.trim()))).filter(
+      Boolean
+    );
+    return unique;
+  }, [subjectOptions]);
 
-  function toggleTag(t: string) {
-    setSelectedTags((prev) => {
-      const has = prev.includes(t);
-      if (has) return prev.filter((x) => x !== t);
-      if (prev.length >= 3) return prev; // max 3
-      return [...prev, t];
-    });
+  const [subject, setSubject] = useState<string>(
+    normalizedSubjectOptions[0] ?? ""
+  );
+
+  const [rating, setRating] = useState<number>(0);
+  const [difficulty, setDifficulty] = useState<number>(2);
+  const [attendance, setAttendance] = useState<number>(2);
+  const [wouldRecommend, setWouldRecommend] = useState<boolean>(true);
+
+  const [reviewText, setReviewText] = useState<string>("");
+
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    setLoading(true);
+    try {
+      // NOTE:
+      // - `course` in DB is used to store subject (per your request).
+      // - `isOnline` removed from UI; we pass false/0 to keep server action stable.
+      const res = await createReview({
+        teacherId,
+        course: subject,
+        rating,
+        difficulty,
+        attendance,
+        recommend: wouldRecommend ? 1 : 0,
+        content: reviewText,
+        isOnline: 0,
+      });
+
+      if (res?.error) {
+        setError(res.error);
+        setLoading(false);
+        return;
+      }
+
+      // Go back to teacher detail page
+      router.push(`/teachers/${teacherId}`);
+      router.refresh();
+    } catch (err: any) {
+      setError(err?.message ?? "Something went wrong.");
+      setLoading(false);
+    }
   }
 
   return (
-    <form
-      action={(fd) => {
-        fd.set("teacherId", teacherId);
+    <form onSubmit={onSubmit} className="space-y-7">
+      {/* Subject select */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">
+          Select subject <span className="text-red-500">*</span>
+        </label>
 
-        // ✅ map selected subject into the backend "course" field (no schema change needed)
-        fd.set("course", subject.trim());
-
-        fd.set("grade", grade || "");
-        fd.set("wouldTakeAgain", wouldTakeAgain || "");
-        fd.set("tags", selectedTags.join(", "));
-        fd.set("comment", comment);
-
-        startTransition(() => createReview(fd));
-      }}
-      className="space-y-6"
-    >
-      {/* 1) Subject */}
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="text-sm font-semibold">
-          Select subject <span className="text-red-600">*</span>
-        </div>
-
-        <div className="mt-5 flex flex-col items-center gap-4">
-          <div className="w-full max-w-xl">
-            <select
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring"
-              required
-              name="subject_select"
-            >
-              {/* single option from teacher.subject */}
-              <option value={subjectValue}>{subjectValue}</option>
-            </select>
-          </div>
-
-          {/* ✅ removed: "This is an online course" checkbox */}
-        </div>
-      </div>
-
-      {/* 2) Quality */}
-      <SegmentRating
-        name="quality"
-        title="Rate your teacher"
-        leftLabel="1 - Awful"
-        rightLabel="5 - Awesome"
-        required
-      />
-
-      {/* 3) Difficulty */}
-      <SegmentRating
-        name="difficulty"
-        title="How difficult was this teacher?"
-        leftLabel="1 - Very Easy"
-        rightLabel="5 - Very Difficult"
-        required
-      />
-
-      {/* 4) Would take again */}
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="text-sm font-semibold">
-          Would you take this teacher again? <span className="text-red-600">*</span>
-        </div>
-
-        <div className="mt-6 flex justify-center gap-16">
-          {[
-            { v: "yes" as const, label: "Yes" },
-            { v: "no" as const, label: "No" },
-          ].map((opt) => {
-            const checked = wouldTakeAgain === opt.v;
-            return (
-              <label key={opt.v} className="flex items-center gap-3 text-sm font-semibold text-neutral-800">
-                <input
-                  type="radio"
-                  checked={checked}
-                  onChange={() => setWouldTakeAgain(opt.v)}
-                  value={opt.v}
-                  className="h-6 w-6"
-                  required
-                  name="wouldTakeAgainRadio"
-                />
-                {opt.label}
-              </label>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 5) Grade */}
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="text-sm font-semibold">Select grade received</div>
-        <div className="mt-5 flex justify-center">
+        {normalizedSubjectOptions.length > 0 ? (
           <select
-            value={grade}
-            onChange={(e) => setGrade(e.target.value)}
-            className="h-11 w-full max-w-xl rounded-xl border bg-white px-3 text-sm outline-none focus:ring"
-            name="grade_select"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-400"
+            required
           >
-            <option value="">Select grade</option>
-            {GRADE_OPTIONS.map((g) => (
-              <option key={g} value={g}>
-                {g}
+            {normalizedSubjectOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}
               </option>
             ))}
           </select>
+        ) : (
+          <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
+            This teacher doesn&apos;t have a subject listed yet. Please go back and
+            try another teacher.
+          </div>
+        )}
+      </div>
+
+      {/* Overall rating */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">
+          Overall rating <span className="text-red-500">*</span>
+        </label>
+        <div className="rounded-md border border-neutral-200 p-4">
+          <StarRating value={rating} onChange={setRating} />
+          <p className="mt-2 text-xs text-neutral-500">
+            Tap a star to select your rating.
+          </p>
         </div>
       </div>
 
-      {/* 6) Tags */}
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="text-sm font-semibold">Tags (choose up to 3)</div>
-        <div className="mt-4 flex flex-wrap gap-3">
-          {tagOptions.map((t) => {
-            const active = selectedTags.includes(t);
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => toggleTag(t)}
-                className={`rounded-full border px-4 py-2 text-xs font-extrabold tracking-wide transition ${
-                  active ? "bg-black text-white" : "bg-white text-neutral-900 hover:bg-neutral-50"
-                }`}
-              >
-                {t}
-              </button>
-            );
-          })}
+      {/* Difficulty */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Difficulty</label>
+        <div className="rounded-md border border-neutral-200 p-4">
+          <SegmentRating
+            value={difficulty}
+            onChange={setDifficulty}
+            labels={DEFAULT_DIFFICULTY_LABELS}
+          />
+          <p className="mt-2 text-xs text-neutral-500">
+            How challenging was the course/subject?
+          </p>
         </div>
       </div>
 
-      {/* 7) Comment */}
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="text-sm font-semibold">Comment (optional)</div>
+      {/* Attendance */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Attendance</label>
+        <div className="rounded-md border border-neutral-200 p-4">
+          <SegmentRating
+            value={attendance}
+            onChange={setAttendance}
+            labels={DEFAULT_ATTENDANCE_LABELS}
+          />
+          <p className="mt-2 text-xs text-neutral-500">
+            How often did you attend?
+          </p>
+        </div>
+      </div>
 
+      {/* Recommend */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Would you recommend?</label>
+        <div className="flex items-center gap-3 rounded-md border border-neutral-200 p-4">
+          <button
+            type="button"
+            onClick={() => setWouldRecommend(true)}
+            className={`rounded-md px-3 py-2 text-sm ${
+              wouldRecommend
+                ? "bg-neutral-900 text-white"
+                : "border border-neutral-200 bg-white hover:bg-neutral-50"
+            }`}
+          >
+            Yes
+          </button>
+          <button
+            type="button"
+            onClick={() => setWouldRecommend(false)}
+            className={`rounded-md px-3 py-2 text-sm ${
+              !wouldRecommend
+                ? "bg-neutral-900 text-white"
+                : "border border-neutral-200 bg-white hover:bg-neutral-50"
+            }`}
+          >
+            No
+          </button>
+        </div>
+      </div>
+
+      {/* Review text */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Write a review</label>
         <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value.slice(0, charLimit))}
-          placeholder="Write your review..."
-          className="mt-4 min-h-[160px] w-full rounded-xl border bg-white px-3 py-3 text-sm outline-none focus:ring"
+          value={reviewText}
+          onChange={(e) => setReviewText(e.target.value)}
+          className="min-h-[120px] w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-400"
+          placeholder="Share details that could help other students…"
         />
-
-        <div className="mt-2 text-xs text-neutral-500">
-          Max {charLimit} characters.
-        </div>
       </div>
 
-      <div className="flex justify-start">
+      {error ? (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={isPending}
-          className="rounded-full bg-black px-8 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          disabled={loading || normalizedSubjectOptions.length === 0 || rating === 0}
+          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isPending ? "Posting..." : "Post review"}
+          {loading ? "Submitting…" : "Submit rating"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => router.push(`/teachers/${teacherId}`)}
+          className="rounded-md border border-neutral-200 bg-white px-4 py-2 text-sm hover:bg-neutral-50"
+        >
+          Cancel
         </button>
       </div>
     </form>
