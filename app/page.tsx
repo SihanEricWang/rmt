@@ -82,7 +82,7 @@ export default function HomePage() {
 
         {/* section header like screenshot */}
         <div className="mt-14 text-center">
-          <div className="text-5xl font-extrabold tracking-tight">Welcome back!</div>
+          <div className="text-5xl font-extrabold tracking-tight">RMT-BIPH</div>
         </div>
 
         {/* three feature blocks (match screenshot 2 layout) */}
