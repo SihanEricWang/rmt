@@ -32,25 +32,22 @@ const GRADE_OPTIONS = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D", "
 
 export default function RateForm({
   teacherId,
-  subjectOptions,
+  teacherSubject,
 }: {
   teacherId: string;
-  subjectOptions: string[];
+  teacherSubject: string | null;
 }) {
+  const defaultSubject = (teacherSubject ?? "").trim();
+  const [subject, setSubject] = useState<string>(defaultSubject || "UNKNOWN");
+
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [comment, setComment] = useState("");
-  const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [wouldTakeAgain, setWouldTakeAgain] = useState<"yes" | "no" | "">("");
 
   const [isPending, startTransition] = useTransition();
 
   const tagOptions = useMemo(() => TAG_OPTIONS, []);
-  const subjects = useMemo(
-    () => Array.from(new Set((subjectOptions ?? []).map((s) => s.trim()).filter(Boolean))),
-    [subjectOptions]
-  );
-
   const charLimit = 350;
 
   function toggleTag(t: string) {
@@ -67,19 +64,15 @@ export default function RateForm({
       action={(fd) => {
         fd.set("teacherId", teacherId);
 
-        // 后端仍然写入 reviews.course（这里只是前端叫 subject）
+        // 为了避免大范围改库/改类型：仍写入 reviews.course 字段，但值为 subject
         fd.set("course", subject.trim());
 
         fd.set("grade", grade || "");
-
-        // 删除 “This is an online course” 选项框，但为了保持后端兼容，固定传 0
-        fd.set("isOnline", "0");
-
         fd.set("wouldTakeAgain", wouldTakeAgain || "");
         fd.set("tags", selectedTags.join(", "));
         fd.set("comment", comment);
 
-        // ✅ server side validation
+        // ✅ enforce rules on server side too
         fd.set("requireCourse", "1");
         fd.set("requireComment", "1");
         fd.set("maxTags", "3");
@@ -95,7 +88,7 @@ export default function RateForm({
           Select subject <span className="text-red-600">*</span>
         </div>
 
-        <div className="mt-5 flex flex-col items-center gap-4">
+        <div className="mt-5 flex justify-center">
           <div className="w-full max-w-xl">
             <select
               value={subject}
@@ -103,22 +96,14 @@ export default function RateForm({
               className="h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring"
               required
             >
-              <option value="" disabled>
-                Select subject
-              </option>
-              {subjects.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
+              {/* 如果 teacher.subject 为空，仍给一个可提交的兜底值，避免 required 卡死 */}
+              {defaultSubject ? (
+                <option value={defaultSubject}>{defaultSubject}</option>
+              ) : (
+                <option value="UNKNOWN">Unknown</option>
+              )}
             </select>
           </div>
-
-          {subjects.length === 0 ? (
-            <div className="w-full max-w-xl rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
-              No subject is set for this teacher yet.
-            </div>
-          ) : null}
         </div>
       </div>
 
@@ -260,7 +245,7 @@ export default function RateForm({
         <div className="mt-5 flex justify-center">
           <button
             type="submit"
-            disabled={isPending || subjects.length === 0}
+            disabled={isPending}
             className="h-11 w-72 rounded-full bg-neutral-400 text-sm font-semibold text-white hover:bg-neutral-500 disabled:opacity-60"
           >
             {isPending ? "Submitting..." : "Submit Rating"}
