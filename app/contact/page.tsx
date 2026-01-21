@@ -137,9 +137,7 @@ export default async function ContactPage({
                     </option>
                   ))}
                 </select>
-                <p className="mt-2 text-xs text-neutral-500">
-                  Common options included: Account & Login, Content Report, Bug Report, Feature Request, Data Correction.
-                </p>
+                
               </div>
 
               <div>
