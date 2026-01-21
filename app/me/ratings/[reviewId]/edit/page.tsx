@@ -1,9 +1,9 @@
 // app/me/ratings/[reviewId]/edit/page.tsx
-import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase";
-import StarRating from "@/components/ui/StarRating";
-import { updateMyReview, deleteMyReview } from "@/lib/actions";
 import ConfirmDeleteButton from "@/components/ui/ConfirmDeleteButton";
+import StarRating from "@/components/ui/StarRating";
+import { deleteMyReview, updateMyReview } from "@/lib/actions";
+import { createSupabaseServerClient } from "@/lib/supabase";
+import { redirect } from "next/navigation";
 
 function emailToHey(email?: string | null) {
   if (!email) return "GUEST";
@@ -24,7 +24,9 @@ export default async function EditMyRatingPage({
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
 
-  if (!user) redirect(`/login?redirectTo=${encodeURIComponent(`/me/ratings/${params.reviewId}/edit`)}`);
+  if (!user) {
+    redirect(`/login?redirectTo=${encodeURIComponent(`/me/ratings/${params.reviewId}/edit`)}`);
+  }
 
   const heyName = emailToHey(user.email);
 
@@ -47,10 +49,7 @@ export default async function EditMyRatingPage({
     <main className="min-h-screen bg-neutral-50">
       <header className="bg-black text-white">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
-          <a
-            href="/teachers"
-            className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black"
-          >
+          <a href="/teachers" className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black">
             RMT
           </a>
           <a href="/me/ratings" className="text-sm font-semibold underline underline-offset-2 decoration-white/40">
@@ -74,7 +73,7 @@ export default async function EditMyRatingPage({
             <span className="mx-2 text-neutral-300">·</span>
             {review.teacher?.subject ?? "—"}
             <span className="mx-2 text-neutral-300">·</span>
-            <a className="underline underline-offset-2" href={`/professor/${review.teacher_id}`}>
+            <a className="underline underline-offset-2" href={`/teachers/${review.teacher_id}`}>
               View teacher page
             </a>
           </div>
@@ -103,7 +102,9 @@ export default async function EditMyRatingPage({
               </label>
 
               <label className="block">
-                <div className="text-sm font-medium">Course code <span className="text-red-600">*</span></div>
+                <div className="text-sm font-medium">
+                  Course code <span className="text-red-600">*</span>
+                </div>
                 <input
                   name="course"
                   defaultValue={review.course ?? ""}
@@ -130,40 +131,18 @@ export default async function EditMyRatingPage({
                 </select>
               </label>
 
-              <label className="flex items-center gap-3 pt-7 text-sm text-neutral-700">
-                <input type="hidden" name="isOnline" value="0" />
-                <input
-                  type="checkbox"
-                  defaultChecked={!!review.is_online}
-                  onChange={() => {}}
-                  // 注意：这里用 checkbox + hidden 的方式提交 1/0
-                  // Next 会提交 "on"，所以我们用下面这个小技巧：
-                  name="isOnlineCheckbox"
-                  className="h-4 w-4"
-                />
-                This is an online course
-              </label>
-
-              {/* hidden field that server action reads */}
-              <input
-                type="hidden"
-                name="isOnline"
-                value={review.is_online ? "1" : "0"}
-              />
-            </div>
-
-            {/* ✅ 解决 checkbox 提交：用一个小脚本? 这里不写 JS，改成最稳的方式：两个 radio */}
-            <div className="rounded-xl border bg-neutral-50 p-4">
-              <div className="text-sm font-medium">Online course?</div>
-              <div className="mt-3 flex gap-6 text-sm">
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="isOnline" value="1" defaultChecked={!!review.is_online} />
-                  Yes
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="isOnline" value="0" defaultChecked={!review.is_online} />
-                  No
-                </label>
+              <div className="rounded-xl border bg-neutral-50 p-4">
+                <div className="text-sm font-medium">Online course?</div>
+                <div className="mt-3 flex gap-6 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="isOnline" value="1" defaultChecked={!!review.is_online} />
+                    Yes
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="isOnline" value="0" defaultChecked={!review.is_online} />
+                    No
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -190,26 +169,21 @@ export default async function EditMyRatingPage({
             </label>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button
-                type="submit"
-                className="rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
-              >
+              <button type="submit" className="rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white hover:opacity-90">
                 Save changes
               </button>
-              <a
-                href="/me/ratings"
-                className="rounded-xl border bg-white px-5 py-2.5 text-sm hover:bg-neutral-50"
-              >
+              <a href="/me/ratings" className="rounded-xl border bg-white px-5 py-2.5 text-sm hover:bg-neutral-50">
                 Cancel
               </a>
-
-              <form action={deleteMyReview} className="ml-auto">
-                <input type="hidden" name="reviewId" value={review.id} />
-                <ConfirmDeleteButton className="rounded-xl border border-rose-300 bg-rose-50 px-5 py-2.5 text-sm text-rose-800 hover:bg-rose-100">
-                  Delete
-                </ConfirmDeleteButton>
-              </form>
             </div>
+          </form>
+
+          {/* Separate, non-nested form for delete (valid HTML) */}
+          <form action={deleteMyReview} className="mt-4 flex justify-end">
+            <input type="hidden" name="reviewId" value={review.id} />
+            <ConfirmDeleteButton className="rounded-xl border border-rose-300 bg-rose-50 px-5 py-2.5 text-sm text-rose-800 hover:bg-rose-100">
+              Delete
+            </ConfirmDeleteButton>
           </form>
         </div>
       </div>
