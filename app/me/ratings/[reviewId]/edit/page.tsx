@@ -43,6 +43,12 @@ export default async function EditMyRatingPage({
     redirect(`/me/ratings?error=${encodeURIComponent("Review not found (or you don't own it).")}`);
   }
 
+  /**
+   * Supabase 的嵌套 select 在类型推断里可能是数组（即使逻辑上是 1 个 teacher）。
+   * 这里做归一化：teacherObj 始终是单个对象或 undefined。
+   */
+  const teacherObj = Array.isArray(review.teacher) ? review.teacher[0] : review.teacher;
+
   const tagsText = Array.isArray(review.tags) ? review.tags.join(", ") : "";
 
   return (
@@ -69,9 +75,9 @@ export default async function EditMyRatingPage({
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <div className="text-2xl font-extrabold tracking-tight">Edit Rating</div>
           <div className="mt-2 text-sm text-neutral-600">
-            <span className="font-semibold">{review.teacher?.full_name ?? "Teacher"}</span>
+            <span className="font-semibold">{teacherObj?.full_name ?? "Teacher"}</span>
             <span className="mx-2 text-neutral-300">·</span>
-            {review.teacher?.subject ?? "—"}
+            {teacherObj?.subject ?? "—"}
             <span className="mx-2 text-neutral-300">·</span>
             <a className="underline underline-offset-2" href={`/teachers/${review.teacher_id}`}>
               View teacher page
