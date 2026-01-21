@@ -1,10 +1,9 @@
-// app/professor/[id]/page.tsx
-import { notFound } from "next/navigation";
+// app/teachers/[id]/page.tsx
+import Header from "@/components/Header";
 import ReviewForm from "@/components/ReviewForm";
 import ReviewVoteButtons from "@/components/ReviewVoteButtons";
 import { createSupabaseServerClient } from "@/lib/supabase";
-import Header from "@/components/Header";
-
+import { notFound } from "next/navigation";
 
 function ratingClass(avg: number | null) {
   if (avg === null) return "bg-neutral-200 text-neutral-900";
@@ -47,7 +46,7 @@ function emailToHey(email?: string | null) {
   return name.replaceAll(".", " ").toUpperCase();
 }
 
-export default async function ProfessorPage({ params, searchParams }: PageProps) {
+export default async function TeacherPage({ params, searchParams }: PageProps) {
   const supabase = createSupabaseServerClient();
   const teacherId = params.id;
 
@@ -78,8 +77,7 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
     2: dist?.q2 ?? 0,
     1: dist?.q1 ?? 0,
   };
-  const totalRatings =
-    (teacher.review_count ?? 0) || Object.values(counts).reduce((a, b) => a + b, 0);
+  const totalRatings = (teacher.review_count ?? 0) || Object.values(counts).reduce((a, b) => a + b, 0);
 
   // top tags
   const { data: topTagsRows } = await supabase
@@ -98,9 +96,9 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
     .eq("teacher_id", teacherId)
     .not("course", "is", null);
 
-  const courseOptions = Array.from(
-    new Set((courseRows ?? []).map((r) => r.course).filter(Boolean) as string[])
-  ).sort((a, b) => a.localeCompare(b));
+  const courseOptions = Array.from(new Set((courseRows ?? []).map((r) => r.course).filter(Boolean) as string[])).sort(
+    (a, b) => a.localeCompare(b)
+  );
 
   const selectedCourse = (searchParams?.course ?? "").trim();
 
@@ -120,9 +118,7 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
   const reviewIds = (reviews ?? []).map((r) => r.id);
 
   const { data: countRows } =
-    reviewIds.length > 0
-      ? await supabase.rpc("get_review_vote_counts", { review_ids: reviewIds })
-      : { data: [] as any[] };
+    reviewIds.length > 0 ? await supabase.rpc("get_review_vote_counts", { review_ids: reviewIds }) : { data: [] as any[] };
 
   const countsByReview = new Map<string, { up: number; down: number }>();
   (countRows ?? []).forEach((row: any) => {
@@ -171,9 +167,7 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
 
             <div className="mt-3 text-sm font-semibold text-neutral-800">
               Overall Quality Based on{" "}
-              <span className="underline underline-offset-2 decoration-neutral-300">
-                {teacher.review_count ?? 0} ratings
-              </span>
+              <span className="underline underline-offset-2 decoration-neutral-300">{teacher.review_count ?? 0} ratings</span>
             </div>
 
             <div className="mt-6 flex items-start justify-between gap-4">
@@ -181,19 +175,12 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
                 <div className="text-5xl font-extrabold tracking-tight">{teacher.full_name}</div>
                 <div className="mt-3 text-sm text-neutral-800">
                   Teacher in the{" "}
-                  <span className="font-semibold underline underline-offset-2">
-                    {teacher.subject ?? "—"}
-                  </span>{" "}
-                  department at{" "}
+                  <span className="font-semibold underline underline-offset-2">{teacher.subject ?? "—"}</span> department at{" "}
                   <span className="font-semibold underline underline-offset-2">BIPH</span>
                 </div>
               </div>
 
-              <button
-                className="mt-2 rounded-lg p-2 hover:bg-neutral-100"
-                aria-label="Bookmark"
-                type="button"
-              >
+              <button className="mt-2 rounded-lg p-2 hover:bg-neutral-100" aria-label="Bookmark" type="button">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="opacity-70">
                   <path
                     d="M6 3h12a1 1 0 011 1v18l-7-4-7 4V4a1 1 0 011-1z"
@@ -220,14 +207,14 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
             <div className="mt-8 flex gap-4">
               {isAuthed ? (
                 <a
-                  href={`/teacher/${teacherId}/rate`}
+                  href={`/teachers/${teacherId}/rate`}
                   className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white hover:opacity-90"
                 >
                   Rate <span className="ml-2">→</span>
                 </a>
               ) : (
                 <a
-                  href={`/login?redirectTo=${encodeURIComponent(`/teacher/${teacherId}/rate`)}`}
+                  href={`/login?redirectTo=${encodeURIComponent(`/teachers/${teacherId}/rate`)}`}
                   className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white hover:opacity-90"
                 >
                   Rate <span className="ml-2">→</span>
@@ -290,12 +277,8 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
         <section id="ratings" className="mt-14">
           <div className="text-lg font-semibold">{teacher.review_count ?? 0} Student Ratings</div>
 
-          {/* ✅ Server-safe Course filter (no onChange / no window) */}
-          <form
-            action={`/teacher/${teacherId}#ratings`}
-            method="get"
-            className="mt-4 flex w-full max-w-sm items-center gap-2"
-          >
+          {/* Server-safe Course filter */}
+          <form action={`/teachers/${teacherId}#ratings`} method="get" className="mt-4 flex w-full max-w-sm items-center gap-2">
             <select
               name="course"
               defaultValue={selectedCourse || ""}
@@ -309,10 +292,7 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
               ))}
             </select>
 
-            <button
-              type="submit"
-              className="h-11 rounded-xl border bg-white px-4 text-sm hover:bg-neutral-50"
-            >
+            <button type="submit" className="h-11 rounded-xl border bg-white px-4 text-sm hover:bg-neutral-50">
               Apply
             </button>
           </form>
@@ -325,9 +305,7 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
 
           <div className="mt-6 space-y-6">
             {(reviews ?? []).length === 0 ? (
-              <div className="rounded-2xl border bg-white p-8 text-sm text-neutral-700">
-                No reviews yet.
-              </div>
+              <div className="rounded-2xl border bg-white p-8 text-sm text-neutral-700">No reviews yet.</div>
             ) : (
               (reviews ?? []).map((r) => {
                 const key = String(r.id);
@@ -341,9 +319,7 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
                       <div className="w-28 shrink-0 text-center">
                         <div className="text-xs font-semibold tracking-wide text-neutral-700">QUALITY</div>
                         <div className={`mt-2 rounded-xl px-3 py-5 ${ratingClass(r.quality)}`}>
-                          <div className="text-4xl font-extrabold leading-none">
-                            {Number(r.quality).toFixed(1)}
-                          </div>
+                          <div className="text-4xl font-extrabold leading-none">{Number(r.quality).toFixed(1)}</div>
                         </div>
                       </div>
 
@@ -357,8 +333,7 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
                         </div>
 
                         <div className="mt-2 text-sm text-neutral-800">
-                          <span className="font-semibold">Would take again:</span>{" "}
-                          {r.would_take_again ? "Yes" : "No"}
+                          <span className="font-semibold">Would take again:</span> {r.would_take_again ? "Yes" : "No"}
                           <span className="mx-2 text-neutral-300">|</span>
                           <span className="font-semibold">Difficulty:</span> {r.difficulty}/5
                         </div>
@@ -376,11 +351,9 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
                           </div>
                         ) : null}
 
-                        {r.comment ? (
-                          <p className="mt-4 whitespace-pre-wrap text-sm text-neutral-800">{r.comment}</p>
-                        ) : null}
+                        {r.comment ? <p className="mt-4 whitespace-pre-wrap text-sm text-neutral-800">{r.comment}</p> : null}
 
-                        {/* ✅ Like / Dislike buttons */}
+                        {/* Like / Dislike buttons */}
                         <ReviewVoteButtons
                           teacherId={teacherId}
                           reviewId={key}
@@ -399,12 +372,7 @@ export default async function ProfessorPage({ params, searchParams }: PageProps)
 
           {/* Review form */}
           <div className="mt-10">
-            <ReviewForm
-              teacherId={teacherId}
-              isAuthed={isAuthed}
-              redirectTo={`/teachers/${teacherId}#rate`}
-              suggestedTags={topTags}
-            />
+            <ReviewForm teacherId={teacherId} isAuthed={isAuthed} redirectTo={`/teachers/${teacherId}#rate`} suggestedTags={topTags} />
           </div>
         </section>
       </div>
