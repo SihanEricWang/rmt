@@ -18,7 +18,7 @@ export default function SiteFooter() {
           </a>
         </div>
 
-        <div className="mt-4 text-center text-neutral-500">© Rate My Teacher (BIPH internal)</div>
+        <div className="mt-4 text-center text-neutral-500">© 2026 Rate My Teacher, BIPH. All Rights Reserved</div>
       </div>
     </footer>
   );
