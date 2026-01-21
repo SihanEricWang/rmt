@@ -1,10 +1,12 @@
 // lib/supabase.ts
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-function getEnv(name: string): string {
+function mustGetEnv(name: string): string {
   const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
+  if (!v) {
+    throw new Error(`Missing environment variable: ${name}`);
+  }
   return v;
 }
 
@@ -12,27 +14,18 @@ export function createSupabaseServerClient() {
   const cookieStore = cookies();
 
   return createServerClient(
-    getEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    mustGetEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustGetEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
     {
       cookies: {
-        get(name) {
+        get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name, value, options) {
-          // In Server Components, cookies are read-only; in Actions/Routes they're writable.
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch {
-            // ignore
-          }
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set({ name, value, ...options });
         },
-        remove(name, options) {
-          try {
-            cookieStore.set({ name, value: "", ...options });
-          } catch {
-            // ignore
-          }
+        remove(name: string, options: CookieOptions) {
+          cookieStore.set({ name, value: "", ...options, maxAge: 0 });
         },
       },
     }
