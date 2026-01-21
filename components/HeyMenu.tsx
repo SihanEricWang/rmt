@@ -15,7 +15,6 @@ export default function HeyMenu({
   const [pending, startTransition] = useTransition();
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
-  // close on outside click + Esc
   useEffect(() => {
     function onDocMouseDown(e: MouseEvent) {
       if (!wrapRef.current) return;
@@ -33,7 +32,6 @@ export default function HeyMenu({
     };
   }, []);
 
-  // guest: just show text (no menu)
   if (!isAuthed) {
     return <div className="text-sm font-extrabold tracking-wide">HEY, {heyName}</div>;
   }
@@ -62,7 +60,7 @@ export default function HeyMenu({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-48 overflow-hidden rounded-xl border bg-white text-black shadow-lg"
+          className="absolute right-0 mt-2 w-52 overflow-hidden rounded-xl border bg-white text-black shadow-lg"
         >
           <a
             role="menuitem"
@@ -70,7 +68,7 @@ export default function HeyMenu({
             className="block px-4 py-3 text-sm hover:bg-neutral-50"
             onClick={() => setOpen(false)}
           >
-            我的工单
+            My Tickets
           </a>
 
           <a
@@ -79,7 +77,7 @@ export default function HeyMenu({
             className="block px-4 py-3 text-sm hover:bg-neutral-50"
             onClick={() => setOpen(false)}
           >
-            My ratings
+            My Ratings
           </a>
 
           <div className="h-px bg-neutral-200" />
