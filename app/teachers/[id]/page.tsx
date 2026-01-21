@@ -1,6 +1,5 @@
 // app/teachers/[id]/page.tsx
 import Header from "@/components/Header";
-import ReviewForm from "@/components/ReviewForm";
 import ReviewVoteButtons from "@/components/ReviewVoteButtons";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { notFound } from "next/navigation";
@@ -114,7 +113,7 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
 
   const { data: reviews, error: reviewsErr } = await reviewsQuery;
 
-  // ---- votes (counts + my vote) ----
+  // votes (counts + my vote)
   const reviewIds = (reviews ?? []).map((r) => r.id);
 
   const { data: countRows } =
@@ -142,9 +141,12 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
     });
   }
 
+  const rateHref = isAuthed
+    ? `/teachers/${teacherId}/rate`
+    : `/login?redirectTo=${encodeURIComponent(`/teachers/${teacherId}/rate`)}`;
+
   return (
     <main className="min-h-screen bg-white">
-      {/* TOP NAV */}
       <Header heyName={heyName} isAuthed={isAuthed} active="teachers" showSearch />
 
       <div className="mx-auto max-w-6xl px-4 py-10">
@@ -203,23 +205,14 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
               </div>
             </div>
 
-            {/* Rate button */}
+            {/* Rate button (primary entry to rating page) */}
             <div className="mt-8 flex gap-4">
-              {isAuthed ? (
-                <a
-                  href={`/teachers/${teacherId}/rate`}
-                  className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white hover:opacity-90"
-                >
-                  Rate <span className="ml-2">→</span>
-                </a>
-              ) : (
-                <a
-                  href={`/login?redirectTo=${encodeURIComponent(`/teachers/${teacherId}/rate`)}`}
-                  className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white hover:opacity-90"
-                >
-                  Rate <span className="ml-2">→</span>
-                </a>
-              )}
+              <a
+                href={rateHref}
+                className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Rate <span className="ml-2">→</span>
+              </a>
             </div>
 
             {/* Top tags */}
@@ -277,7 +270,7 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
         <section id="ratings" className="mt-14">
           <div className="text-lg font-semibold">{teacher.review_count ?? 0} Student Ratings</div>
 
-          {/* Server-safe Course filter */}
+          {/* Course filter */}
           <form action={`/teachers/${teacherId}#ratings`} method="get" className="mt-4 flex w-full max-w-sm items-center gap-2">
             <select
               name="course"
@@ -353,7 +346,6 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
 
                         {r.comment ? <p className="mt-4 whitespace-pre-wrap text-sm text-neutral-800">{r.comment}</p> : null}
 
-                        {/* Like / Dislike buttons */}
                         <ReviewVoteButtons
                           teacherId={teacherId}
                           reviewId={key}
@@ -370,9 +362,15 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
             )}
           </div>
 
-          {/* Review form */}
-          <div className="mt-10">
-            <ReviewForm teacherId={teacherId} isAuthed={isAuthed} redirectTo={`/teachers/${teacherId}#rate`} suggestedTags={topTags} />
+          {/* ✅ Removed: embedded "Rate this teacher" form card.
+              Instead, provide a simple CTA button to go to the dedicated rate page. */}
+          <div className="mt-10 flex justify-center">
+            <a
+              href={rateHref}
+              className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white hover:opacity-90"
+            >
+              Rate this teacher <span className="ml-2">→</span>
+            </a>
           </div>
         </section>
       </div>
