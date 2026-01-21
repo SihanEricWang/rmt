@@ -5,9 +5,6 @@ export default function SiteFooter() {
       <div className="mx-auto max-w-6xl px-4 py-8 text-xs text-neutral-600">
         <div className="flex flex-wrap justify-center gap-6">
           <a className="hover:underline" href="#">
-            Help
-          </a>
-          <a className="hover:underline" href="#">
             Site Guidelines
           </a>
           <a className="hover:underline" href="#">
@@ -15,6 +12,9 @@ export default function SiteFooter() {
           </a>
           <a className="hover:underline" href="#">
             Privacy Policy
+          </a>
+          <a className="hover:underline" href="#">
+            Contact Us
           </a>
         </div>
 
