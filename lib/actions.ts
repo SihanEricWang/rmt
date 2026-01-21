@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "./supabase";
 
 const ALLOWED_DOMAIN_SUFFIX = "@basischina.com";
@@ -79,7 +79,7 @@ async function requireInternalUserOrRedirect(redirectTo?: string) {
 }
 
 // --------------------
-// Auth actions (used by app/login.tsx)
+// Auth actions (used by app/login/page.tsx)
 // --------------------
 export async function signInWithPassword(formData: FormData) {
   const email = str(formData.get("email")).toLowerCase();
@@ -89,10 +89,14 @@ export async function signInWithPassword(formData: FormData) {
   const redirectTo = safeRedirectPath(redirectToRaw, "/teachers");
 
   if (!email || !password) {
-    redirect(`/login?error=${encodeURIComponent("Email and password are required.")}&redirectTo=${encodeURIComponent(redirectTo)}`);
+    redirect(
+      `/login?error=${encodeURIComponent("Email and password are required.")}&redirectTo=${encodeURIComponent(redirectTo)}`
+    );
   }
   if (!email.endsWith(ALLOWED_DOMAIN_SUFFIX)) {
-    redirect(`/login?error=${encodeURIComponent("Only internal emails are allowed.")}&redirectTo=${encodeURIComponent(redirectTo)}`);
+    redirect(
+      `/login?error=${encodeURIComponent("Only internal emails are allowed.")}&redirectTo=${encodeURIComponent(redirectTo)}`
+    );
   }
 
   const supabase = createSupabaseServerClient();
@@ -161,13 +165,12 @@ export async function createReview(formData: FormData) {
 
   // yes/no required by RateForm, optional in ReviewForm (defaults to "yes")
   const wouldTakeAgainRaw = str(formData.get("wouldTakeAgain")).toLowerCase();
-  const would_take_again =
-    wouldTakeAgainRaw === "yes" ? true : wouldTakeAgainRaw === "no" ? false : null;
+  const would_take_again = wouldTakeAgainRaw === "yes" ? true : wouldTakeAgainRaw === "no" ? false : null;
 
   // optional metadata
   const course = str(formData.get("course"));
   const grade = str(formData.get("grade"));
-  const isOnline = bool01(str(formData.get("isOnline")));
+  const isOnline = bool01(getLast(formData, "isOnline"));
   const comment = str(formData.get("comment"));
 
   // server-enforced knobs (sent by RateForm)
@@ -198,16 +201,14 @@ export async function createReview(formData: FormData) {
   }
   if (comment.length > commentLimit) {
     redirect(
-      `${teacherRatePage(teacherId)}?error=${encodeURIComponent(
-        `Review is too long (max ${commentLimit} characters).`
-      )}`
+      `${teacherRatePage(teacherId)}?error=${encodeURIComponent(`Review is too long (max ${commentLimit} characters).`)}`
     );
   }
 
   // If not provided (older form), default to true to avoid blocking.
   const wta = would_take_again ?? true;
 
-  const { supabase, user } = await requireInternalUserOrRedirect(`${teacherRatePage(teacherId)}`);
+  const { supabase, user } = await requireInternalUserOrRedirect(teacherRatePage(teacherId));
 
   const { error } = await supabase.from("reviews").insert({
     teacher_id: teacherId,
@@ -235,15 +236,12 @@ export async function updateMyReview(formData: FormData) {
   const reviewId = str(formData.get("reviewId"));
   if (!reviewId) redirect(`/me/ratings?error=${encodeURIComponent("Missing review id.")}`);
 
-  // IMPORTANT: handle duplicated "isOnline" keys; take the last submitted value
-  const isOnlineValue = getLast(formData, "isOnline");
-  const isOnline = isOnlineValue === "1";
-
   const quality = intInRange(str(formData.get("quality")), 1, 5);
   const difficulty = intInRange(str(formData.get("difficulty")), 1, 5);
   const wouldTakeAgain = str(formData.get("wouldTakeAgain")).toLowerCase();
   const course = str(formData.get("course"));
   const grade = str(formData.get("grade"));
+  const isOnline = bool01(getLast(formData, "isOnline"));
   const comment = str(formData.get("comment"));
 
   const tagsRaw = str(formData.get("tags"));
@@ -256,19 +254,21 @@ export async function updateMyReview(formData: FormData) {
         .map((t) => t.toUpperCase())
     : [];
 
-  if (quality === null) redirect(`/me/ratings/${encodeURIComponent(reviewId)}/edit?error=${encodeURIComponent("Quality must be 1-5.")}`);
-  if (difficulty === null) redirect(`/me/ratings/${encodeURIComponent(reviewId)}/edit?error=${encodeURIComponent("Difficulty must be 1-5.")}`);
+  const editPath = `/me/ratings/${encodeURIComponent(reviewId)}/edit`;
+
+  if (quality === null) redirect(`${editPath}?error=${encodeURIComponent("Quality must be 1-5.")}`);
+  if (difficulty === null) redirect(`${editPath}?error=${encodeURIComponent("Difficulty must be 1-5.")}`);
   if (wouldTakeAgain !== "yes" && wouldTakeAgain !== "no") {
-    redirect(`/me/ratings/${encodeURIComponent(reviewId)}/edit?error=${encodeURIComponent("Would take again is required.")}`);
+    redirect(`${editPath}?error=${encodeURIComponent("Would take again is required.")}`);
   }
   if (!course) {
-    redirect(`/me/ratings/${encodeURIComponent(reviewId)}/edit?error=${encodeURIComponent("Course code is required.")}`);
+    redirect(`${editPath}?error=${encodeURIComponent("Course code is required.")}`);
   }
   if (comment.length > 1200) {
-    redirect(`/me/ratings/${encodeURIComponent(reviewId)}/edit?error=${encodeURIComponent("Comment is too long (max 1200).")}`);
+    redirect(`${editPath}?error=${encodeURIComponent("Comment is too long (max 1200).")}`);
   }
 
-  const { supabase, user } = await requireInternalUserOrRedirect(`/me/ratings/${encodeURIComponent(reviewId)}/edit`);
+  const { supabase, user } = await requireInternalUserOrRedirect(editPath);
 
   const { data: updated, error } = await supabase
     .from("reviews")
@@ -288,7 +288,7 @@ export async function updateMyReview(formData: FormData) {
     .maybeSingle();
 
   if (error || !updated) {
-    redirect(`/me/ratings/${encodeURIComponent(reviewId)}/edit?error=${encodeURIComponent(error?.message ?? "Update failed.")}`);
+    redirect(`${editPath}?error=${encodeURIComponent(error?.message ?? "Update failed.")}`);
   }
 
   revalidatePath("/me/ratings");
@@ -333,12 +333,7 @@ export async function setReviewVote(formData: FormData) {
   const { supabase, user } = await requireInternalUserOrRedirect(teacherPage(teacherId));
 
   if (op === "clear") {
-    const { error } = await supabase
-      .from("review_votes")
-      .delete()
-      .eq("review_id", reviewId)
-      .eq("user_id", user.id);
-
+    const { error } = await supabase.from("review_votes").delete().eq("review_id", reviewId).eq("user_id", user.id);
     if (error) throw new Error(error.message);
 
     revalidatePath(teacherPage(teacherId));
@@ -347,10 +342,9 @@ export async function setReviewVote(formData: FormData) {
 
   const vote = op === "up" ? 1 : -1;
 
-  const { error } = await supabase.from("review_votes").upsert(
-    { review_id: reviewId, user_id: user.id, vote },
-    { onConflict: "review_id,user_id" }
-  );
+  const { error } = await supabase
+    .from("review_votes")
+    .upsert({ review_id: reviewId, user_id: user.id, vote }, { onConflict: "review_id,user_id" });
 
   if (error) throw new Error(error.message);
 
