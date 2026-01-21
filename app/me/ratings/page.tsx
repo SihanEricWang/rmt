@@ -43,10 +43,7 @@ export default async function MyRatingsPage({
       {/* Top nav */}
       <header className="bg-black text-white">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
-          <a
-            href="/teachers"
-            className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black"
-          >
+          <a href="/teachers" className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black">
             RMT
           </a>
           <div className="text-sm font-semibold">My Ratings</div>
@@ -69,14 +66,9 @@ export default async function MyRatingsPage({
         <div className="flex items-end justify-between gap-4">
           <div>
             <div className="text-3xl font-extrabold tracking-tight">Your Ratings</div>
-            <div className="mt-1 text-sm text-neutral-600">
-              You can edit or delete ratings you posted.
-            </div>
+            <div className="mt-1 text-sm text-neutral-600">You can edit or delete ratings you posted.</div>
           </div>
-          <a
-            href="/teachers"
-            className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-neutral-50"
-          >
+          <a href="/teachers" className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-neutral-50">
             Browse teachers
           </a>
         </div>
@@ -102,12 +94,10 @@ export default async function MyRatingsPage({
               <div key={r.id} className="rounded-2xl border bg-white p-6 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="text-xl font-extrabold tracking-tight">
-                      {r.teacher?.full_name ?? "Unknown Teacher"}
-                    </div>
+                    <div className="text-xl font-extrabold tracking-tight">{r.teacher?.full_name ?? "Unknown Teacher"}</div>
                     <div className="mt-1 text-sm text-neutral-600">
                       {r.teacher?.subject ?? "—"} ·{" "}
-                      <a className="underline underline-offset-2" href={`/professor/${r.teacher_id}`}>
+                      <a className="underline underline-offset-2" href={`/teachers/${r.teacher_id}`}>
                         View teacher page
                       </a>
                     </div>
@@ -120,10 +110,7 @@ export default async function MyRatingsPage({
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
-                    <a
-                      href={`/me/ratings/${r.id}/edit`}
-                      className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-neutral-50"
-                    >
+                    <a href={`/me/ratings/${r.id}/edit`} className="rounded-xl border bg-white px-4 py-2 text-sm hover:bg-neutral-50">
                       Edit
                     </a>
 
@@ -141,17 +128,13 @@ export default async function MyRatingsPage({
                   <span className="mx-2 text-neutral-300">|</span>
                   <span className="font-semibold">Difficulty:</span> {r.difficulty}/5
                   <span className="mx-2 text-neutral-300">|</span>
-                  <span className="font-semibold">Would take again:</span>{" "}
-                  {r.would_take_again ? "Yes" : "No"}
+                  <span className="font-semibold">Would take again:</span> {r.would_take_again ? "Yes" : "No"}
                 </div>
 
                 {Array.isArray(r.tags) && r.tags.length > 0 ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {r.tags.map((t: string) => (
-                      <span
-                        key={t}
-                        className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-800"
-                      >
+                      <span key={t} className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-800">
                         {t}
                       </span>
                     ))}
