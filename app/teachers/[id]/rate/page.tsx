@@ -1,22 +1,12 @@
 // app/teachers/[id]/rate/page.tsx
-import RateForm from "@/components/RateForm";
+import { redirect, notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase";
-import { notFound, redirect } from "next/navigation";
+import RateForm from "@/components/RateForm";
 
 function emailToHey(email?: string | null) {
   if (!email) return "GUEST";
   const name = email.split("@")[0] || "USER";
   return name.replaceAll(".", " ").toUpperCase();
-}
-
-function splitSubjects(subject?: string | null): string[] {
-  const raw = (subject ?? "").trim();
-  if (!raw) return [];
-  // 支持 "Math, Physics" | "Math/Physics" | "Math | Physics" | "Math;Physics"
-  return raw
-    .split(/[,;|/]+/g)
-    .map((s) => s.trim())
-    .filter(Boolean);
 }
 
 export default async function RatePage({ params }: { params: { id: string } }) {
@@ -40,7 +30,6 @@ export default async function RatePage({ params }: { params: { id: string } }) {
 
   if (tErr || !teacher) notFound();
 
-  const subjectOptions = splitSubjects(teacher.subject);
   const heyName = emailToHey(user.email);
 
   return (
@@ -48,7 +37,17 @@ export default async function RatePage({ params }: { params: { id: string } }) {
       {/* Top nav (match style) */}
       <header className="bg-black text-white">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
-          <a href="/teachers" className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black">
+          <a
+            href={`/teachers/${teacherId}`}
+            className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15"
+          >
+            ← Back
+          </a>
+
+          <a
+            href="/teachers"
+            className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black"
+          >
             RMT
           </a>
 
@@ -62,12 +61,17 @@ export default async function RatePage({ params }: { params: { id: string } }) {
               />
             </form>
             <div className="text-sm text-white/70">at</div>
-            <div className="text-sm font-semibold underline underline-offset-2 decoration-white/40">BIPH</div>
+            <div className="text-sm font-semibold underline underline-offset-2 decoration-white/40">
+              BIPH
+            </div>
           </div>
 
           <div className="ml-auto flex items-center gap-4">
             <div className="text-sm font-extrabold tracking-wide">HEY, {heyName}</div>
-            <a href="#guidelines" className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-black hover:opacity-90">
+            <a
+              href="#guidelines"
+              className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-black hover:opacity-90"
+            >
               Help
             </a>
           </div>
@@ -76,17 +80,6 @@ export default async function RatePage({ params }: { params: { id: string } }) {
 
       {/* Page header */}
       <div className="mx-auto max-w-6xl px-4 py-10">
-        {/* Back button (不要放到顶栏) */}
-        <div className="mb-6 flex items-center justify-between">
-          <a
-            href={`/teachers/${teacherId}`}
-            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm hover:bg-neutral-50"
-          >
-            <span aria-hidden>←</span>
-            Back
-          </a>
-        </div>
-
         <div className="mb-8">
           <div className="text-5xl font-extrabold tracking-tight">{teacher.full_name}</div>
           <div className="text-2xl font-medium text-neutral-800">Add Rating</div>
@@ -97,23 +90,15 @@ export default async function RatePage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        <RateForm teacherId={teacherId} subjectOptions={subjectOptions} />
+        <RateForm teacherId={teacherId} teacherSubject={teacher.subject ?? null} />
 
         {/* Footer like screenshot */}
         <footer className="mt-14 border-t py-8 text-xs text-neutral-600">
           <div className="flex flex-wrap justify-center gap-6">
-            <a className="hover:underline" href="#guidelines">
-              Help
-            </a>
-            <a className="hover:underline" href="#guidelines">
-              Site Guidelines
-            </a>
-            <a className="hover:underline" href="#guidelines">
-              Terms &amp; Conditions
-            </a>
-            <a className="hover:underline" href="#guidelines">
-              Privacy Policy
-            </a>
+            <a className="hover:underline" href="#guidelines">Help</a>
+            <a className="hover:underline" href="#guidelines">Site Guidelines</a>
+            <a className="hover:underline" href="#guidelines">Terms &amp; Conditions</a>
+            <a className="hover:underline" href="#guidelines">Privacy Policy</a>
           </div>
           <div className="mt-4 text-center text-neutral-500">© Rate My Teacher (BIPH internal)</div>
         </footer>
