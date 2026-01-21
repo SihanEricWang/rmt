@@ -1,213 +1,271 @@
+// components/RateForm.tsx
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import StarRating from "@/components/ui/StarRating";
+import { useMemo, useState, useTransition } from "react";
 import SegmentRating from "@/components/ui/SegmentRating";
 import { createReview } from "@/lib/actions";
 
-type Props = {
+const TAG_OPTIONS = [
+  "TOUGH GRADER",
+  "GET READY TO READ",
+  "PARTICIPATION MATTERS",
+  "EXTRA CREDIT",
+  "GROUP PROJECTS",
+  "AMAZING LECTURES",
+  "CLEAR GRADING CRITERIA",
+  "GIVES GOOD FEEDBACK",
+  "INSPIRATIONAL",
+  "LOTS OF HOMEWORK",
+  "HILARIOUS",
+  "BEWARE OF POP QUIZZES",
+  "SO MANY PAPERS",
+  "CARING",
+  "RESPECTED",
+  "LECTURE HEAVY",
+  "TEST HEAVY",
+  "GRADED BY FEW THINGS",
+  "ACCESSIBLE OUTSIDE CLASS",
+  "ONLINE SAVVY",
+];
+
+const GRADE_OPTIONS = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D", "F", "P", "NP"];
+
+export default function RateForm({
+  teacherId,
+  subjectOptions,
+}: {
   teacherId: string;
-  subjectOptions?: string[];
-};
+  subjectOptions: string[];
+}) {
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [comment, setComment] = useState("");
+  const [subject, setSubject] = useState("");
+  const [grade, setGrade] = useState("");
+  const [wouldTakeAgain, setWouldTakeAgain] = useState<"yes" | "no" | "">("");
 
-const DEFAULT_DIFFICULTY_LABELS = ["Easy", "Medium", "Hard"];
-const DEFAULT_ATTENDANCE_LABELS = ["Never", "Sometimes", "Always"];
+  const [isPending, startTransition] = useTransition();
 
-export default function RateForm({ teacherId, subjectOptions = [] }: Props) {
-  const router = useRouter();
-
-  // Subject (stored in DB as `course` for compatibility)
-  const normalizedSubjectOptions = useMemo(() => {
-    const unique = Array.from(new Set(subjectOptions.map((s) => s.trim()))).filter(
-      Boolean
-    );
-    return unique;
-  }, [subjectOptions]);
-
-  const [subject, setSubject] = useState<string>(
-    normalizedSubjectOptions[0] ?? ""
+  const tagOptions = useMemo(() => TAG_OPTIONS, []);
+  const subjects = useMemo(
+    () => Array.from(new Set((subjectOptions ?? []).map((s) => s.trim()).filter(Boolean))),
+    [subjectOptions]
   );
 
-  const [rating, setRating] = useState<number>(0);
-  const [difficulty, setDifficulty] = useState<number>(2);
-  const [attendance, setAttendance] = useState<number>(2);
-  const [wouldRecommend, setWouldRecommend] = useState<boolean>(true);
+  const charLimit = 350;
 
-  const [reviewText, setReviewText] = useState<string>("");
-
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    setLoading(true);
-    try {
-      // NOTE:
-      // - `course` in DB is used to store subject (per your request).
-      // - `isOnline` removed from UI; we pass false/0 to keep server action stable.
-      const res = await createReview({
-        teacherId,
-        course: subject,
-        rating,
-        difficulty,
-        attendance,
-        recommend: wouldRecommend ? 1 : 0,
-        content: reviewText,
-        isOnline: 0,
-      });
-
-      if (res?.error) {
-        setError(res.error);
-        setLoading(false);
-        return;
-      }
-
-      // Go back to teacher detail page
-      router.push(`/teachers/${teacherId}`);
-      router.refresh();
-    } catch (err: any) {
-      setError(err?.message ?? "Something went wrong.");
-      setLoading(false);
-    }
+  function toggleTag(t: string) {
+    setSelectedTags((prev) => {
+      const has = prev.includes(t);
+      if (has) return prev.filter((x) => x !== t);
+      if (prev.length >= 3) return prev; // max 3
+      return [...prev, t];
+    });
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-7">
-      {/* Subject select */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">
-          Select subject <span className="text-red-500">*</span>
-        </label>
+    <form
+      action={(fd) => {
+        fd.set("teacherId", teacherId);
 
-        {normalizedSubjectOptions.length > 0 ? (
-          <select
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-400"
-            required
-          >
-            {normalizedSubjectOptions.map((s) => (
-              <option key={s} value={s}>
-                {s}
+        // 后端仍然写入 reviews.course（这里只是前端叫 subject）
+        fd.set("course", subject.trim());
+
+        fd.set("grade", grade || "");
+
+        // 删除 “This is an online course” 选项框，但为了保持后端兼容，固定传 0
+        fd.set("isOnline", "0");
+
+        fd.set("wouldTakeAgain", wouldTakeAgain || "");
+        fd.set("tags", selectedTags.join(", "));
+        fd.set("comment", comment);
+
+        // ✅ server side validation
+        fd.set("requireCourse", "1");
+        fd.set("requireComment", "1");
+        fd.set("maxTags", "3");
+        fd.set("commentLimit", "350");
+
+        startTransition(() => createReview(fd));
+      }}
+      className="space-y-6"
+    >
+      {/* 1) Subject */}
+      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="text-sm font-semibold">
+          Select subject <span className="text-red-600">*</span>
+        </div>
+
+        <div className="mt-5 flex flex-col items-center gap-4">
+          <div className="w-full max-w-xl">
+            <select
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring"
+              required
+            >
+              <option value="" disabled>
+                Select subject
               </option>
-            ))}
-          </select>
-        ) : (
-          <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
-            This teacher doesn&apos;t have a subject listed yet. Please go back and
-            try another teacher.
+              {subjects.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
-      </div>
 
-      {/* Overall rating */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">
-          Overall rating <span className="text-red-500">*</span>
-        </label>
-        <div className="rounded-md border border-neutral-200 p-4">
-          <StarRating value={rating} onChange={setRating} />
-          <p className="mt-2 text-xs text-neutral-500">
-            Tap a star to select your rating.
-          </p>
+          {subjects.length === 0 ? (
+            <div className="w-full max-w-xl rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
+              No subject is set for this teacher yet.
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {/* Difficulty */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Difficulty</label>
-        <div className="rounded-md border border-neutral-200 p-4">
-          <SegmentRating
-            value={difficulty}
-            onChange={setDifficulty}
-            labels={DEFAULT_DIFFICULTY_LABELS}
+      {/* 2) Quality */}
+      <SegmentRating
+        name="quality"
+        title="Rate your teacher"
+        leftLabel="1 - Awful"
+        rightLabel="5 - Awesome"
+        required
+      />
+
+      {/* 3) Difficulty */}
+      <SegmentRating
+        name="difficulty"
+        title="How difficult was this teacher?"
+        leftLabel="1 - Very Easy"
+        rightLabel="5 - Very Difficult"
+        required
+      />
+
+      {/* 4) Would take again */}
+      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="text-sm font-semibold">
+          Would you take this teacher again? <span className="text-red-600">*</span>
+        </div>
+
+        <div className="mt-6 flex justify-center gap-16">
+          {[
+            { v: "yes" as const, label: "Yes" },
+            { v: "no" as const, label: "No" },
+          ].map((opt) => {
+            const checked = wouldTakeAgain === opt.v;
+            return (
+              <label key={opt.v} className="flex flex-col items-center gap-3 text-sm text-neutral-700">
+                <input
+                  type="radio"
+                  name="wouldTakeAgainRadio"
+                  value={opt.v}
+                  checked={checked}
+                  onChange={() => setWouldTakeAgain(opt.v)}
+                  className="h-6 w-6"
+                  required
+                />
+                {opt.label}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 5) Grade */}
+      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="text-sm font-semibold">Select grade received</div>
+
+        <div className="mt-5 flex justify-center">
+          <div className="w-full max-w-xl">
+            <select
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
+              className="h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring"
+            >
+              <option value="">Select grade</option>
+              {GRADE_OPTIONS.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* 6) Tags */}
+      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="text-sm font-semibold">Select up to 3 tags</div>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          {tagOptions.map((t) => {
+            const active = selectedTags.includes(t);
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => toggleTag(t)}
+                className={[
+                  "rounded-full px-4 py-2 text-xs font-semibold",
+                  active ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-800 hover:bg-neutral-200",
+                ].join(" ")}
+              >
+                {t}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-3 text-xs text-neutral-500">Selected: {selectedTags.length}/3</div>
+      </div>
+
+      {/* 7) Write a Review */}
+      <div className="rounded-2xl border bg-white p-6 shadow-sm" id="guidelines">
+        <div className="text-sm font-semibold">
+          Write a Review <span className="text-red-600">*</span>
+        </div>
+        <p className="mt-2 text-sm text-neutral-600">
+          Discuss the teacher&apos;s teaching style and ability to convey the material clearly.
+        </p>
+
+        <details className="mt-4 rounded-xl border bg-neutral-50 p-4">
+          <summary className="cursor-pointer text-sm font-semibold">Guidelines</summary>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-neutral-700">
+            <li>Your rating could be removed if you use profanity or derogatory terms.</li>
+            <li>Don&apos;t claim that the teacher shows bias or favoritism for or against students.</li>
+            <li>Don&apos;t forget to proofread!</li>
+          </ul>
+        </details>
+
+        <div className="mt-4">
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value.slice(0, charLimit))}
+            placeholder="What do you want other students to know about this teacher?"
+            className="h-44 w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none focus:ring"
+            required
           />
-          <p className="mt-2 text-xs text-neutral-500">
-            How challenging was the course/subject?
-          </p>
+          <div className="mt-2 text-right text-xs text-neutral-500">
+            {comment.length}/{charLimit}
+          </div>
         </div>
       </div>
 
-      {/* Attendance */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Attendance</label>
-        <div className="rounded-md border border-neutral-200 p-4">
-          <SegmentRating
-            value={attendance}
-            onChange={setAttendance}
-            labels={DEFAULT_ATTENDANCE_LABELS}
-          />
-          <p className="mt-2 text-xs text-neutral-500">
-            How often did you attend?
-          </p>
-        </div>
-      </div>
+      {/* 8) Submit area */}
+      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <p className="text-center text-xs text-neutral-600">
+          By clicking the &quot;Submit&quot; button, you acknowledge that you have read and agreed to the site
+          guidelines and terms. (Internal project for BIPH)
+        </p>
 
-      {/* Recommend */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Would you recommend?</label>
-        <div className="flex items-center gap-3 rounded-md border border-neutral-200 p-4">
+        <div className="mt-5 flex justify-center">
           <button
-            type="button"
-            onClick={() => setWouldRecommend(true)}
-            className={`rounded-md px-3 py-2 text-sm ${
-              wouldRecommend
-                ? "bg-neutral-900 text-white"
-                : "border border-neutral-200 bg-white hover:bg-neutral-50"
-            }`}
+            type="submit"
+            disabled={isPending || subjects.length === 0}
+            className="h-11 w-72 rounded-full bg-neutral-400 text-sm font-semibold text-white hover:bg-neutral-500 disabled:opacity-60"
           >
-            Yes
-          </button>
-          <button
-            type="button"
-            onClick={() => setWouldRecommend(false)}
-            className={`rounded-md px-3 py-2 text-sm ${
-              !wouldRecommend
-                ? "bg-neutral-900 text-white"
-                : "border border-neutral-200 bg-white hover:bg-neutral-50"
-            }`}
-          >
-            No
+            {isPending ? "Submitting..." : "Submit Rating"}
           </button>
         </div>
-      </div>
-
-      {/* Review text */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Write a review</label>
-        <textarea
-          value={reviewText}
-          onChange={(e) => setReviewText(e.target.value)}
-          className="min-h-[120px] w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-400"
-          placeholder="Share details that could help other students…"
-        />
-      </div>
-
-      {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={loading || normalizedSubjectOptions.length === 0 || rating === 0}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? "Submitting…" : "Submit rating"}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => router.push(`/teachers/${teacherId}`)}
-          className="rounded-md border border-neutral-200 bg-white px-4 py-2 text-sm hover:bg-neutral-50"
-        >
-          Cancel
-        </button>
       </div>
     </form>
   );
