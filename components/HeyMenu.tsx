@@ -1,6 +1,7 @@
 // components/HeyMenu.tsx
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { signOut } from "@/lib/actions";
 
@@ -23,7 +24,6 @@ export default function HeyMenu({
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
-
     document.addEventListener("mousedown", onDocMouseDown);
     document.addEventListener("keydown", onKeyDown);
     return () => {
@@ -47,13 +47,7 @@ export default function HeyMenu({
       >
         HEY, {heyName}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="opacity-80">
-          <path
-            d="M6 9l6 6 6-6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
 
@@ -62,23 +56,25 @@ export default function HeyMenu({
           role="menu"
           className="absolute right-0 mt-2 w-52 overflow-hidden rounded-xl border bg-white text-black shadow-lg"
         >
-          <a
+          <Link
             role="menuitem"
             href="/me/tickets"
             className="block px-4 py-3 text-sm hover:bg-neutral-50"
             onClick={() => setOpen(false)}
+            prefetch
           >
             My Tickets
-          </a>
+          </Link>
 
-          <a
+          <Link
             role="menuitem"
             href="/me/ratings"
             className="block px-4 py-3 text-sm hover:bg-neutral-50"
             onClick={() => setOpen(false)}
+            prefetch
           >
             My Ratings
-          </a>
+          </Link>
 
           <div className="h-px bg-neutral-200" />
 
