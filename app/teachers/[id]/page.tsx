@@ -338,8 +338,6 @@ export default async function TeacherPage({
           </div>
         </section>
       </div>
-
-      <SiteFooter />
     </main>
   );
 }
