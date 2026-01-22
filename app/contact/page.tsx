@@ -93,7 +93,7 @@ export default async function ContactPage({
   return (
     <main className="min-h-screen bg-neutral-50">
       <div className="mx-auto max-w-3xl px-4 py-10">
-        <BackButton href="/teachers" label="Back to Teachers" />
+        <BackButton fallbackHref="/teachers">Back to Teachers</BackButton>
 
         <h1 className="text-3xl font-extrabold tracking-tight">Contact Us</h1>
         <p className="mt-2 text-sm text-neutral-700">Submit a ticket for help, partnerships, or suggestions. </p>
