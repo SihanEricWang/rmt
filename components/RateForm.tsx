@@ -223,7 +223,7 @@ export default function RateForm({
           <summary className="cursor-pointer text-sm font-semibold">Guidelines</summary>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-neutral-700">
             <li>Harmful ratings could be removed.</li>
-            <li>Fell free to speak.</li>
+            <li>Feel free to speak.</li>
             <li>Tell the truth!</li>
           </ul>
         </details>
