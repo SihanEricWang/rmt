@@ -1,4 +1,6 @@
 // app/admin/(protected)/layout.tsx
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/session";
 import { adminLogout } from "@/lib/admin/actions";
