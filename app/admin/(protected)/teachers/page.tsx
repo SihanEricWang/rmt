@@ -3,6 +3,21 @@ import Link from "next/link";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import { adminCreateTeacher, adminDeleteTeacher } from "@/lib/admin/actions";
 
+type TeacherRow = {
+  id: string;
+  full_name: string | null;
+  subject: string | null; // legacy primary subject
+  subjects: string[] | null; // new multi-subjects
+};
+
+function normalizeSubjects(t: TeacherRow): string[] {
+  const arr = Array.isArray(t.subjects) ? t.subjects : [];
+  const cleaned = arr.map((s) => (s ?? "").trim()).filter(Boolean);
+  if (cleaned.length) return cleaned;
+  if (t.subject?.trim()) return [t.subject.trim()];
+  return [];
+}
+
 export default async function AdminTeachersPage({
   searchParams,
 }: {
@@ -10,10 +25,12 @@ export default async function AdminTeachersPage({
 }) {
   const supabase = createSupabaseAdminClient();
 
-  const { data: teachers, error } = await supabase
+  const { data, error } = await supabase
     .from("teachers")
-    .select("id, full_name, subject")
+    .select("id, full_name, subject, subjects")
     .order("full_name", { ascending: true });
+
+  const teachers = (data ?? []) as TeacherRow[];
 
   return (
     <div>
@@ -22,7 +39,9 @@ export default async function AdminTeachersPage({
           <div>
             <div className="text-xs font-semibold text-neutral-500">Admin</div>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight">Teachers</h1>
-            <div className="mt-1 text-sm text-neutral-600">Create / edit / delete teacher name & subject.</div>
+            <div className="mt-1 text-sm text-neutral-600">
+              Create / edit / delete teacher name & subjects (comma separated).
+            </div>
           </div>
         </div>
 
@@ -44,7 +63,7 @@ export default async function AdminTeachersPage({
 
         {/* Create */}
         <form action={adminCreateTeacher} className="mt-6 grid gap-3 md:grid-cols-3">
-          <div className="md:col-span-2">
+          <div className="md:col-span-1">
             <div className="text-xs font-semibold text-neutral-600">Full name</div>
             <input
               name="full_name"
@@ -53,14 +72,19 @@ export default async function AdminTeachersPage({
               required
             />
           </div>
-          <div>
-            <div className="text-xs font-semibold text-neutral-600">Subject</div>
+
+          <div className="md:col-span-2">
+            <div className="text-xs font-semibold text-neutral-600">Subjects (comma separated)</div>
             <input
-              name="subject"
+              name="subjects"
               className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
-              placeholder="e.g. Math"
+              placeholder="e.g. Math, Physics, Chemistry"
             />
+            <div className="mt-1 text-xs text-neutral-500">
+              The first subject will be treated as the primary subject for legacy views.
+            </div>
           </div>
+
           <div className="md:col-span-3">
             <button className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
               + Add Teacher
@@ -71,33 +95,38 @@ export default async function AdminTeachersPage({
 
       {/* List */}
       <div className="mt-4 rounded-2xl border bg-white p-0 shadow-sm">
-        <div className="border-b px-6 py-4 text-sm font-semibold">All teachers ({(teachers ?? []).length})</div>
+        <div className="border-b px-6 py-4 text-sm font-semibold">All teachers ({teachers.length})</div>
 
         <div className="divide-y">
-          {(teachers ?? []).map((t) => (
-            <div key={t.id} className="flex flex-wrap items-center gap-3 px-6 py-4">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-extrabold">{t.full_name}</div>
-                <div className="text-xs text-neutral-600">{t.subject || "—"}</div>
+          {teachers.map((t) => {
+            const subs = normalizeSubjects(t);
+            return (
+              <div key={t.id} className="flex flex-wrap items-center gap-3 px-6 py-4">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-extrabold">{t.full_name || "—"}</div>
+                  <div className="mt-1 text-xs text-neutral-600">
+                    {subs.length ? subs.join(", ") : "—"}
+                  </div>
+                </div>
+
+                <Link
+                  href={`/admin/teachers/${encodeURIComponent(t.id)}/edit`}
+                  className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-neutral-50"
+                >
+                  Edit
+                </Link>
+
+                <form action={adminDeleteTeacher}>
+                  <input type="hidden" name="id" value={t.id} />
+                  <button className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-900 hover:bg-rose-100">
+                    Delete
+                  </button>
+                </form>
               </div>
+            );
+          })}
 
-              <Link
-                href={`/admin/teachers/${encodeURIComponent(t.id)}/edit`}
-                className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-neutral-50"
-              >
-                Edit
-              </Link>
-
-              <form action={adminDeleteTeacher}>
-                <input type="hidden" name="id" value={t.id} />
-                <button className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-900 hover:bg-rose-100">
-                  Delete
-                </button>
-              </form>
-            </div>
-          ))}
-
-          {(teachers ?? []).length === 0 ? (
+          {teachers.length === 0 ? (
             <div className="px-6 py-10 text-sm text-neutral-600">No teachers yet.</div>
           ) : null}
         </div>
