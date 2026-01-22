@@ -1,4 +1,5 @@
 // app/me/tickets/[id]/page.tsx
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase";
 
@@ -41,7 +42,6 @@ function shortId(id: string) {
 export default async function TicketDetailPage({ params }: { params: { id: string } }) {
   const supabase = createSupabaseServerClient();
 
-  // auth gate
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) {
@@ -50,13 +50,9 @@ export default async function TicketDetailPage({ params }: { params: { id: strin
 
   const heyName = emailToHey(user.email);
 
-  // IMPORTANT: filter by both ticket id AND user_id
-  // (Even with RLS, this keeps things safe and explicit.)
   const { data: ticket, error } = await supabase
     .from("support_tickets")
-    .select(
-      "id, created_at, updated_at, category, category_other, title, description, status, admin_note"
-    )
+    .select("id, created_at, updated_at, category, category_other, title, description, status, admin_note")
     .eq("id", params.id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -72,12 +68,15 @@ export default async function TicketDetailPage({ params }: { params: { id: strin
 
   return (
     <main className="min-h-screen bg-neutral-50">
-      {/* Header (matches your black header style) */}
       <header className="bg-black text-white">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
-          <a href="/teachers" className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black">
+          <Link
+            href="/teachers"
+            className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black"
+            prefetch
+          >
             RMT
-          </a>
+          </Link>
 
           <div className="text-sm font-semibold">Ticket</div>
 
@@ -87,13 +86,14 @@ export default async function TicketDetailPage({ params }: { params: { id: strin
 
       <div className="mx-auto max-w-4xl px-4 py-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <a
+          <Link
             href="/me/tickets"
             className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-neutral-900 shadow-sm ring-1 ring-neutral-200 hover:bg-neutral-50"
+            prefetch
           >
             <span aria-hidden>←</span>
             Back to My Tickets
-          </a>
+          </Link>
 
           <div className="text-xs text-neutral-500">
             Ticket ID: <span className="font-mono">{shortId(ticket.id)}</span>
