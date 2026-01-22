@@ -2,8 +2,42 @@
 import Header from "@/components/Header";
 import ReviewVoteButtons from "@/components/ReviewVoteButtons";
 import { createSupabaseServerClient } from "@/lib/supabase";
-import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+
+function ratingClass(avg: number | null) {
+  if (avg === null) return "bg-neutral-200 text-neutral-900";
+  if (avg < 2) return "bg-rose-200 text-neutral-900";
+  if (avg < 3) return "bg-orange-200 text-neutral-900";
+  if (avg < 4) return "bg-yellow-200 text-neutral-900";
+  return "bg-emerald-200 text-neutral-900";
+}
+
+function fmt1(n: number | null) {
+  if (n === null || Number.isNaN(n)) return "—";
+  return n.toFixed(1);
+}
+
+function fmtPct(n: number | null) {
+  if (n === null || Number.isNaN(n)) return "—";
+  return `${Math.round(n)}%`;
+}
+
+function ordinal(n: number) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  const month = d.toLocaleString("en-US", { month: "short" });
+  return `${month} ${ordinal(d.getDate())}, ${d.getFullYear()}`;
+}
+
+type PageProps = {
+  params: { id: string };
+  searchParams?: { course?: string; error?: string };
+};
 
 function emailToHey(email?: string | null) {
   if (!email) return "GUEST";
@@ -11,188 +45,175 @@ function emailToHey(email?: string | null) {
   return name.replaceAll(".", " ").toUpperCase();
 }
 
-function safeNum(v: unknown, fallback = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function fmt1(v: number | null | undefined) {
-  if (v === null || v === undefined) return "—";
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "—";
-  return n.toFixed(1);
-}
-
-/**
- * teacher_list.pct_would_take_again is already 0..100 (percent), not 0..1.
- */
-function fmtPct100(v: number | null | undefined) {
-  if (v === null || v === undefined) return "—";
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "—";
-  const clamped = Math.max(0, Math.min(100, n));
-  return `${Math.round(clamped)}%`;
-}
-
-function clamp01(n: number) {
-  return Math.max(0, Math.min(1, n));
-}
-
-function distPercent(count: number, total: number) {
-  if (!total) return 0;
-  return clamp01(count / total);
-}
-
-function formatReviewDate(v: string) {
-  const d = new Date(v);
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
-
-export default async function TeacherPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { sort?: string; course?: string };
-}) {
+export default async function TeacherPage({ params, searchParams }: PageProps) {
   const supabase = createSupabaseServerClient();
-
   const teacherId = params.id;
-  const sort = (searchParams?.sort ?? "top").trim();
-  const course = (searchParams?.course ?? "").trim();
 
-  // Who is the user? (for HEY menu + auth gating)
   const { data: userData } = await supabase.auth.getUser();
-  const user = userData.user;
-  const isAuthed = !!user;
-  const heyName = emailToHey(user?.email);
+  const isAuthed = !!userData.user;
+  const heyName = emailToHey(userData.user?.email);
 
-  // Fetch in parallel where possible
-  const teacherPromise = supabase
+  // main teacher stats (from aggregated view)
+  const { data: teacher, error: teacherErr } = await supabase
     .from("teacher_list")
     .select("id, full_name, subject, avg_quality, review_count, pct_would_take_again, avg_difficulty")
     .eq("id", teacherId)
     .maybeSingle();
 
-  const distPromise = supabase
+  if (teacherErr || !teacher) notFound();
+
+  // rating distribution
+  const { data: dist } = await supabase
     .from("teacher_quality_distribution")
-    .select("q1, q2, q3, q4, q5, total")
+    .select("q5,q4,q3,q2,q1")
     .eq("teacher_id", teacherId)
     .maybeSingle();
 
-  const tagsPromise = supabase
+  const counts = {
+    5: dist?.q5 ?? 0,
+    4: dist?.q4 ?? 0,
+    3: dist?.q3 ?? 0,
+    2: dist?.q2 ?? 0,
+    1: dist?.q1 ?? 0,
+  };
+  const totalRatings = (teacher.review_count ?? 0) || Object.values(counts).reduce((a, b) => a + b, 0);
+
+  // top tags
+  const { data: topTagsRows } = await supabase
     .from("teacher_top_tags")
-    .select("tag")
+    .select("tag,cnt")
     .eq("teacher_id", teacherId)
     .order("cnt", { ascending: false })
-    .limit(12);
+    .limit(10);
 
+  const topTags = (topTagsRows ?? []).map((r) => String(r.tag));
+
+  // course dropdown options
+  const { data: courseRows } = await supabase
+    .from("reviews")
+    .select("course")
+    .eq("teacher_id", teacherId)
+    .not("course", "is", null);
+
+  const courseOptions = Array.from(new Set((courseRows ?? []).map((r) => r.course).filter(Boolean) as string[])).sort(
+    (a, b) => a.localeCompare(b)
+  );
+
+  const selectedCourse = (searchParams?.course ?? "").trim();
+
+  // ✅ Fetch enough reviews to make the "most upvoted" ordering meaningful,
+  // but cap to keep the RPC payload reasonable.
+  const maxReviewsToFetch = Math.min(Number(teacher.review_count ?? 200) || 200, 1000);
+
+  // reviews list
   let reviewsQuery = supabase
     .from("reviews")
-    .select("id, teacher_id, quality, difficulty, would_take_again, comment, tags, course, grade, is_online, created_at")
-    .eq("teacher_id", teacherId);
+    .select("id, quality, difficulty, would_take_again, comment, tags, course, created_at")
+    .eq("teacher_id", teacherId)
+    .order("created_at", { ascending: false })
+    .limit(maxReviewsToFetch);
 
-  if (course) reviewsQuery = reviewsQuery.eq("course", course);
+  if (selectedCourse) reviewsQuery = reviewsQuery.eq("course", selectedCourse);
 
-  const reviewsPromise = reviewsQuery.order("created_at", { ascending: false });
+  const { data: reviews, error: reviewsErr } = await reviewsQuery;
 
-  const [{ data: teacher, error: teacherError }, { data: distRows }, { data: tagRows }, { data: reviews }] =
-    await Promise.all([teacherPromise, distPromise, tagsPromise, reviewsPromise]);
+  // votes (counts + my vote)
+  const reviewIds = (reviews ?? []).map((r) => r.id);
 
-  if (teacherError || !teacher) redirect("/teachers");
+  const { data: countRows } =
+    reviewIds.length > 0 ? await supabase.rpc("get_review_vote_counts", { review_ids: reviewIds }) : { data: [] as any[] };
 
-  const topTags = (tagRows ?? []).map((r: any) => String(r.tag)).filter(Boolean);
-
-  const totalReviews = safeNum(distRows?.total, safeNum(teacher.review_count, 0));
-  const q1 = safeNum(distRows?.q1, 0);
-  const q2 = safeNum(distRows?.q2, 0);
-  const q3 = safeNum(distRows?.q3, 0);
-  const q4 = safeNum(distRows?.q4, 0);
-  const q5 = safeNum(distRows?.q5, 0);
-
-  // Votes: counts via RPC + my votes
-  const reviewIds = (reviews ?? []).map((r: any) => r.id);
-
-  const [voteCountsRes, myVotesRes] = await Promise.all([
-    reviewIds.length
-      ? supabase.rpc("get_review_vote_counts", { review_ids: reviewIds })
-      : Promise.resolve({ data: [] as any[] }),
-    isAuthed && reviewIds.length
-      ? supabase.from("review_votes").select("review_id, vote").eq("user_id", user!.id).in("review_id", reviewIds)
-      : Promise.resolve({ data: [] as any[] }),
-  ]);
-
-  const voteCountsRows = (voteCountsRes as any).data ?? [];
-  const myVotes = (myVotesRes as any).data ?? [];
-
-  const voteCountsMap = new Map<string, { up: number; down: number }>();
-  (voteCountsRows ?? []).forEach((row: any) => {
-    voteCountsMap.set(String(row.review_id), { up: safeNum(row.upvotes, 0), down: safeNum(row.downvotes, 0) });
+  const countsByReview = new Map<string, { up: number; down: number }>();
+  (countRows ?? []).forEach((row: any) => {
+    countsByReview.set(String(row.review_id), {
+      up: Number(row.upvotes ?? 0),
+      down: Number(row.downvotes ?? 0),
+    });
   });
 
-  const myVotesMap = new Map<string, 1 | -1 | 0>();
-  (myVotes ?? []).forEach((v: any) => {
-    const rid = String(v.review_id);
-    const vv = Number(v.vote);
-    myVotesMap.set(rid, vv === 1 ? 1 : vv === -1 ? -1 : 0);
+  // ✅ Sort reviews by most upvotes (likes) first.
+  // Tie-breakers: fewer downvotes, then newest first.
+  const sortedReviews = (reviews ?? []).slice().sort((a: any, b: any) => {
+    const aKey = String(a.id);
+    const bKey = String(b.id);
+    const aCounts = countsByReview.get(aKey) ?? { up: 0, down: 0 };
+    const bCounts = countsByReview.get(bKey) ?? { up: 0, down: 0 };
+
+    if (bCounts.up !== aCounts.up) return bCounts.up - aCounts.up;
+    if (aCounts.down !== bCounts.down) return aCounts.down - bCounts.down;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  // Sort reviews client-side according to vote counts (top) or newest
-  const sortedReviews = [...(reviews ?? [])];
+  const myVoteByReview = new Map<string, 1 | -1>();
+  if (isAuthed && reviewIds.length > 0) {
+    const { data: myVotes } = await supabase
+      .from("review_votes")
+      .select("review_id,vote")
+      .in("review_id", reviewIds)
+      .eq("user_id", userData.user!.id);
 
-  if (sort === "new") {
-    sortedReviews.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  } else {
-    // top: upvotes - downvotes, tie-breaker newest
-    sortedReviews.sort((a: any, b: any) => {
-      const av = voteCountsMap.get(String(a.id)) ?? { up: 0, down: 0 };
-      const bv = voteCountsMap.get(String(b.id)) ?? { up: 0, down: 0 };
-      const as = av.up - av.down;
-      const bs = bv.up - bv.down;
-      if (bs !== as) return bs - as;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    (myVotes ?? []).forEach((v: any) => {
+      const vv = Number(v.vote);
+      if (vv === 1 || vv === -1) myVoteByReview.set(String(v.review_id), vv);
     });
   }
 
-  const rateRedirectTo = `/teachers/${teacherId}/rate`;
-  const rateHref = isAuthed ? rateRedirectTo : `/login?redirectTo=${encodeURIComponent(rateRedirectTo)}`;
-
-  const reviewCount = safeNum(teacher.review_count, 0);
-  const overallScore = fmt1(teacher.avg_quality);
+  const rateHref = isAuthed
+    ? `/teachers/${teacherId}/rate`
+    : `/login?redirectTo=${encodeURIComponent(`/teachers/${teacherId}/rate`)}`;
 
   return (
     <main className="min-h-screen bg-white">
       <Header heyName={heyName} isAuthed={isAuthed} active="teachers" showSearch />
 
       <div className="mx-auto max-w-6xl px-4 py-10">
+        {searchParams?.error ? (
+          <div className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+            {searchParams.error}
+          </div>
+        ) : null}
+
         {/* TOP GRID */}
-        <div className="grid gap-10 lg:grid-cols-[1fr_420px]">
+        <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           {/* LEFT PANEL */}
           <section>
-            {/* Overall block (RMP-style) */}
-            <div>
-              <div className="flex items-start">
-                <div className="text-6xl font-black leading-none tracking-tight">{overallScore}</div>
-                <div className="ml-1 relative -top-1 text-2xl font-black leading-none text-neutral-900">/5</div>
-              </div>
-
-              <div className="mt-2 text-sm text-neutral-600">
-                <span className="font-semibold text-neutral-800">Overall Quality</span>{" "}
-                <span className="text-neutral-500">
-                  {reviewCount === 0 ? "No ratings yet" : `Based on ${reviewCount} ratings`}
-                </span>
-              </div>
-
-              <div className="mt-10">
-                <div className="text-4xl font-extrabold tracking-tight">{teacher.full_name}</div>
-                <div className="mt-2 text-sm font-semibold text-neutral-600">{teacher.subject ?? "—"}</div>
+            <div className="flex items-start gap-4">
+              <div className="flex items-end gap-3">
+                <div className="text-7xl font-black leading-none">{fmt1(teacher.avg_quality)}</div>
+                <div className="pb-3 text-lg font-semibold text-neutral-400">/ 5</div>
               </div>
             </div>
 
-            {/* KPIs */}
-            <div className="mt-10 grid max-w-xl grid-cols-2 gap-6">
+            <div className="mt-3 text-sm font-semibold text-neutral-800">
+              Overall Quality Based on{" "}
+              <span className="underline underline-offset-2 decoration-neutral-300">{teacher.review_count ?? 0} ratings</span>
+            </div>
+
+            <div className="mt-6 flex items-start justify-between gap-4">
+              <div>
+                <div className="text-5xl font-extrabold tracking-tight">{teacher.full_name}</div>
+                <div className="mt-3 text-sm text-neutral-800">
+                  Teacher in the{" "}
+                  <span className="font-semibold underline underline-offset-2">{teacher.subject ?? "—"}</span> department at{" "}
+                  <span className="font-semibold underline underline-offset-2">BIPH</span>
+                </div>
+              </div>
+
+              <button className="mt-2 rounded-lg p-2 hover:bg-neutral-100" aria-label="Bookmark" type="button">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="opacity-70">
+                  <path
+                    d="M6 3h12a1 1 0 011 1v18l-7-4-7 4V4a1 1 0 011-1z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mt-8 grid max-w-xl grid-cols-2 gap-6">
               <div className="border-r pr-6">
-                <div className="text-4xl font-black">{reviewCount === 0 ? "—" : fmtPct100(teacher.pct_would_take_again)}</div>
+                <div className="text-4xl font-black">{fmtPct(teacher.pct_would_take_again)}</div>
                 <div className="mt-1 text-sm text-neutral-700">Would take again</div>
               </div>
               <div className="pl-6">
@@ -201,19 +222,18 @@ export default async function TeacherPage({
               </div>
             </div>
 
-            {/* Rate button */}
-            <div className="mt-10">
-              <Link
+            {/* Rate button (primary entry to rating page) */}
+            <div className="mt-8 flex gap-4">
+              <a
                 href={rateHref}
-                className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-                prefetch
+                className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white hover:opacity-90"
               >
                 Rate <span className="ml-2">→</span>
-              </Link>
+              </a>
             </div>
 
             {/* Top tags */}
-            <div className="mt-12">
+            <div className="mt-10">
               <div className="text-lg font-semibold">{teacher.full_name}&apos;s Top Tags</div>
               <div className="mt-4 flex flex-wrap gap-3">
                 {topTags.length === 0 ? (
@@ -233,102 +253,125 @@ export default async function TeacherPage({
           </section>
 
           {/* RIGHT PANEL */}
-          <section className="rounded-3xl bg-neutral-50 p-6">
+          <section className="rounded-2xl bg-neutral-50 p-6">
             <div className="text-lg font-semibold">Rating Distribution</div>
 
             <div className="mt-6 space-y-5">
               {[
-                { label: "5 stars", n: q5 },
-                { label: "4 stars", n: q4 },
-                { label: "3 stars", n: q3 },
-                { label: "2 stars", n: q2 },
-                { label: "1 star", n: q1 },
-              ].map((row) => (
-                <div key={row.label} className="grid grid-cols-[70px_1fr_40px] items-center gap-3 text-sm">
-                  <div className="text-neutral-700">{row.label}</div>
-                  <div className="h-2 overflow-hidden rounded-full bg-neutral-200">
-                    <div className="h-full bg-neutral-900" style={{ width: `${distPercent(row.n, totalReviews) * 100}%` }} />
+                { label: "Awesome", score: 5 },
+                { label: "Great", score: 4 },
+                { label: "Good", score: 3 },
+                { label: "OK", score: 2 },
+                { label: "Awful", score: 1 },
+              ].map(({ label, score }) => {
+                const c = counts[score as 1 | 2 | 3 | 4 | 5] ?? 0;
+                const pct = totalRatings > 0 ? (c / totalRatings) * 100 : 0;
+
+                return (
+                  <div key={score} className="grid grid-cols-[110px_1fr_44px] items-center gap-4">
+                    <div className="text-sm text-neutral-800">
+                      {label} <span className="font-semibold">{score}</span>
+                    </div>
+                    <div className="h-10 rounded bg-neutral-200">
+                      <div className="h-10 rounded bg-blue-600" style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="text-right text-sm font-semibold text-neutral-900">{c}</div>
                   </div>
-                  <div className="text-right font-semibold text-neutral-900">{row.n}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         </div>
 
-        {/* RATINGS */}
+        {/* REVIEWS */}
         <section id="ratings" className="mt-14">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="text-2xl font-extrabold tracking-tight">Ratings</div>
+          <div className="text-lg font-semibold">{teacher.review_count ?? 0} Student Ratings</div>
 
-            <div className="flex items-center gap-3 text-sm">
-              <Link
-                href={`/teachers/${teacherId}?sort=top${course ? `&course=${encodeURIComponent(course)}` : ""}#ratings`}
-                className={`rounded-full border px-5 py-2 font-semibold transition ${
-                  sort !== "new" ? "bg-black text-white" : "bg-white hover:bg-neutral-50"
-                }`}
-                prefetch
-              >
-                Top
-              </Link>
-              <Link
-                href={`/teachers/${teacherId}?sort=new${course ? `&course=${encodeURIComponent(course)}` : ""}#ratings`}
-                className={`rounded-full border px-5 py-2 font-semibold transition ${
-                  sort === "new" ? "bg-black text-white" : "bg-white hover:bg-neutral-50"
-                }`}
-                prefetch
-              >
-                New
-              </Link>
+          {/* Course filter */}
+          <form action={`/teachers/${teacherId}#ratings`} method="get" className="mt-4 flex w-full max-w-sm items-center gap-2">
+            <select
+              name="course"
+              defaultValue={selectedCourse || ""}
+              className="h-11 w-44 rounded-xl border bg-white px-3 text-sm outline-none focus:ring"
+            >
+              <option value="">All courses</option>
+              {courseOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
+            <button type="submit" className="h-11 rounded-xl border bg-white px-4 text-sm hover:bg-neutral-50">
+              Apply
+            </button>
+          </form>
+
+          {reviewsErr ? (
+            <div className="mt-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+              Failed to load reviews: {reviewsErr.message}
             </div>
-          </div>
+          ) : null}
 
           <div className="mt-6 space-y-6">
             {sortedReviews.length === 0 ? (
-              <div className="rounded-2xl border bg-white p-8 text-sm text-neutral-700">No ratings yet. Be the first to rate.</div>
+              <div className="rounded-2xl border bg-white p-8 text-sm text-neutral-700">No reviews yet.</div>
             ) : (
-              sortedReviews.map((r: any) => {
+              sortedReviews.map((r) => {
                 const key = String(r.id);
-                const voteCounts = voteCountsMap.get(key) ?? { up: 0, down: 0 };
-                const myVote = myVotesMap.get(key) ?? 0;
+                const voteCounts = countsByReview.get(key) ?? { up: 0, down: 0 };
+                const myVote = (myVoteByReview.get(key) ?? 0) as 1 | -1 | 0;
 
                 return (
-                  <div key={key} className="rounded-2xl border bg-white p-6 shadow-sm">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-neutral-900">
-                        Quality {r.quality}/5 <span className="mx-2 text-neutral-300">·</span> Difficulty {r.difficulty}/5{" "}
-                        <span className="mx-2 text-neutral-300">·</span>{" "}
-                        {r.would_take_again ? "Would take again" : "Would NOT take again"}
-                      </div>
-
-                      <div className="mt-2 text-xs text-neutral-500">
-                        {r.course ? String(r.course).toUpperCase() : ""} {r.is_online ? "· Online" : ""}{" "}
-                        {r.grade ? `· Grade: ${r.grade}` : ""} {r.created_at ? `· ${formatReviewDate(String(r.created_at))}` : ""}
-                      </div>
-
-                      {Array.isArray(r.tags) && r.tags.length > 0 ? (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {r.tags.map((t: string) => (
-                            <span
-                              key={t}
-                              className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-800"
-                            >
-                              {t}
-                            </span>
-                          ))}
+                  <div key={key} className="rounded-2xl border bg-white shadow-sm">
+                    <div className="flex gap-6 p-6">
+                      {/* left quality box */}
+                      <div className="w-28 shrink-0 text-center">
+                        <div className="text-xs font-semibold tracking-wide text-neutral-700">QUALITY</div>
+                        <div className={`mt-2 rounded-xl px-3 py-5 ${ratingClass(r.quality)}`}>
+                          <div className="text-4xl font-extrabold leading-none">{Number(r.quality).toFixed(1)}</div>
                         </div>
-                      ) : null}
+                      </div>
 
-                      {r.comment ? <p className="mt-4 whitespace-pre-wrap text-sm text-neutral-800">{r.comment}</p> : null}
+                      {/* content */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="text-sm font-extrabold tracking-wide text-neutral-900">
+                            {r.course ? String(r.course).toUpperCase() : "—"}
+                          </div>
+                          <div className="text-sm text-neutral-500">{formatDate(r.created_at)}</div>
+                        </div>
 
-                      <ReviewVoteButtons
-                        teacherId={teacherId}
-                        reviewId={key}
-                        upvotes={voteCounts.up}
-                        downvotes={voteCounts.down}
-                        myVote={myVote}
-                        isAuthed={isAuthed}
-                      />
+                        <div className="mt-2 text-sm text-neutral-800">
+                          <span className="font-semibold">Would take again:</span> {r.would_take_again ? "Yes" : "No"}
+                          <span className="mx-2 text-neutral-300">|</span>
+                          <span className="font-semibold">Difficulty:</span> {r.difficulty}/5
+                        </div>
+
+                        {Array.isArray(r.tags) && r.tags.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {r.tags.map((t: string) => (
+                              <span
+                                key={t}
+                                className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-800"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {r.comment ? <p className="mt-4 whitespace-pre-wrap text-sm text-neutral-800">{r.comment}</p> : null}
+
+                        <ReviewVoteButtons
+                          teacherId={teacherId}
+                          reviewId={key}
+                          upvotes={voteCounts.up}
+                          downvotes={voteCounts.down}
+                          myVote={myVote}
+                          isAuthed={isAuthed}
+                        />
+                      </div>
                     </div>
                   </div>
                 );
@@ -337,13 +380,12 @@ export default async function TeacherPage({
           </div>
 
           <div className="mt-10 flex justify-center">
-            <Link
+            <a
               href={rateHref}
-              className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-              prefetch
+              className="inline-flex items-center justify-center rounded-full bg-blue-600 px-10 py-3 text-sm font-semibold text-white hover:opacity-90"
             >
               Rate this teacher <span className="ml-2">→</span>
-            </Link>
+            </a>
           </div>
         </section>
       </div>
