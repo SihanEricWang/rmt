@@ -46,6 +46,9 @@ export default async function TeachersPage({ searchParams }: PageProps) {
     .select("id, full_name, subject, avg_quality, review_count, pct_would_take_again, avg_difficulty", {
       count: "exact",
     })
+    // ✅ Sort teachers by most reviews first
+    .order("review_count", { ascending: false })
+    // ✅ Stable tie-breaker
     .order("full_name", { ascending: true })
     .range(from, to);
 
