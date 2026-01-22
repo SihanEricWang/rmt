@@ -1,5 +1,10 @@
 // components/Header.tsx
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import HeyMenu from "@/components/HeyMenu";
+import { useEffect, useState } from "react";
 
 export default function Header({
   heyName,
@@ -16,15 +21,40 @@ export default function Header({
   searchAction?: string;
   searchDefaultValue?: string;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  const [q, setQ] = useState(searchDefaultValue ?? params.get("q") ?? "");
+
+  // 让输入框在 back/forward 或外部 push 时同步
+  useEffect(() => {
+    setQ(searchDefaultValue ?? params.get("q") ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
+
+  function submitSearch(nextQ: string) {
+    const next = new URLSearchParams(params.toString());
+    if (!nextQ.trim()) next.delete("q");
+    else next.set("q", nextQ.trim());
+    next.delete("page");
+    const qs = next.toString();
+
+    // 如果 Header 在 /teachers 上就用当前 pathname，否则用 searchAction
+    const base = pathname.startsWith("/teachers") ? "/teachers" : searchAction;
+    router.push(qs ? `${base}?${qs}` : base);
+  }
+
   return (
     <header className="bg-black text-white">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
-        <a
+        <Link
           href="/"
           className="rounded bg-white px-2 py-1 text-xs font-black tracking-widest text-black"
+          prefetch
         >
           RMT
-        </a>
+        </Link>
 
         {showSearch ? (
           <div className="hidden items-center gap-3 md:flex">
@@ -34,21 +64,30 @@ export default function Header({
 
             {active !== "my_ratings" ? (
               <>
-                <form action={searchAction} className="relative">
+                <form
+                  className="relative"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submitSearch(q);
+                  }}
+                >
                   <input
-                    name="q"
-                    defaultValue={searchDefaultValue}
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
                     placeholder="Teacher name"
                     className="h-9 w-[360px] rounded-full bg-white/10 px-4 text-sm outline-none placeholder:text-white/60 focus:bg-white/15"
                   />
                 </form>
+
                 <div className="text-sm text-white/70">at</div>
-                <a
+
+                <Link
                   href="/teachers"
                   className="text-sm font-semibold underline underline-offset-2 decoration-white/40"
+                  prefetch
                 >
                   BIPH
-                </a>
+                </Link>
               </>
             ) : null}
           </div>
