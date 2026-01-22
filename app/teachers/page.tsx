@@ -3,7 +3,6 @@ import Header from "@/components/Header";
 import SearchBar from "@/components/SearchBar";
 import TeacherCard from "@/components/TeacherCard";
 import { createSupabaseServerClient } from "@/lib/supabase";
-import Link from "next/link";
 import type { TeacherListItem } from "@/types";
 
 type PageProps = {
@@ -23,66 +22,59 @@ function emailToHey(email?: string | null) {
 export default async function TeachersPage({ searchParams }: PageProps) {
   const supabase = createSupabaseServerClient();
 
+  // who is the user? (for "HEY, USER")
+  const { data: userData } = await supabase.auth.getUser();
+  const heyName = emailToHey(userData.user?.email);
+
   const q = (searchParams?.q ?? "").trim();
   const subject = (searchParams?.subject ?? "").trim();
 
+  // pagination
   const pageSize = 10;
   const page = Math.max(1, Number(searchParams?.page ?? "1") || 1);
   const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
-  const userPromise = supabase.auth.getUser();
-
-  const subjectsPromise = supabase.from("teachers").select("subject").order("subject", { ascending: true });
-
-  let listQuery = supabase
-    .from("teacher_list")
-    .select("id, full_name, subject, avg_quality, review_count, pct_would_take_again, avg_difficulty")
-    .order("review_count", { ascending: false })
-    .order("full_name", { ascending: true })
-    .range(from, from + pageSize);
-
-  if (q) listQuery = listQuery.ilike("full_name", `%${q}%`);
-  if (subject) listQuery = listQuery.eq("subject", subject);
-
-  const [{ data: userData }, { data: subjectRows }, { data, error }] = await Promise.all([
-    userPromise,
-    subjectsPromise,
-    listQuery,
-  ]);
-
-  const heyName = emailToHey(userData.user?.email);
+  // fetch subjects (for "Any" dropdown)
+  const { data: subjectRows } = await supabase.from("teachers").select("subject").order("subject", { ascending: true });
 
   const subjects = Array.from(new Set((subjectRows ?? []).map((r) => r.subject).filter(Boolean) as string[]));
 
-  const rows = (data ?? []) as TeacherListItem[];
-  const hasNext = rows.length > pageSize;
-  const teachers = hasNext ? rows.slice(0, pageSize) : rows;
-  const hasPrev = page > 1;
+  // fetch teacher list (aggregated view)
+  let queryBuilder = supabase
+    .from("teacher_list")
+    .select("id, full_name, subject, avg_quality, review_count, pct_would_take_again, avg_difficulty", {
+      count: "exact",
+    })
+    // ✅ Sort teachers by most reviews first
+    .order("review_count", { ascending: false })
+    // ✅ Stable tie-breaker
+    .order("full_name", { ascending: true })
+    .range(from, to);
+
+  if (q) queryBuilder = queryBuilder.ilike("full_name", `%${q}%`);
+  if (subject) queryBuilder = queryBuilder.eq("subject", subject);
+
+  const { data, error, count } = await queryBuilder;
+  const teachers = (data ?? []) as TeacherListItem[];
 
   const qsBase = new URLSearchParams({
     ...(q ? { q } : {}),
     ...(subject ? { subject } : {}),
   });
 
-  const prevHref = `/teachers?${new URLSearchParams({
-    ...Object.fromEntries(qsBase.entries()),
-    page: String(page - 1),
-  }).toString()}`;
-
-  const nextHref = `/teachers?${new URLSearchParams({
-    ...Object.fromEntries(qsBase.entries()),
-    page: String(page + 1),
-  }).toString()}`;
-
   return (
     <main className="min-h-screen bg-neutral-50">
+      {/* TOP NAV */}
       <Header heyName={heyName} isAuthed={!!userData.user} active="teachers" showSearch searchDefaultValue={q} />
 
+      {/* CONTENT */}
       <div className="mx-auto max-w-6xl px-4 py-10">
+        {/* big search + Any dropdown */}
         <SearchBar subjects={subjects} />
 
         <div className="mt-8 text-2xl font-medium tracking-tight">
-          Teachers at <span className="font-extrabold">BIPH</span>
+          {(count ?? 0).toLocaleString()} teachers at <span className="font-extrabold">BIPH</span>
         </div>
 
         {error ? (
@@ -99,25 +91,34 @@ export default async function TeachersPage({ searchParams }: PageProps) {
           )}
         </div>
 
-        {(hasPrev || hasNext) ? (
+        {/* pagination */}
+        {count !== null && count > pageSize ? (
           <div className="mt-10 flex items-center justify-between text-sm">
-            <Link
-              className={`rounded-lg border px-4 py-2 ${!hasPrev ? "pointer-events-none opacity-40" : "hover:bg-white"}`}
-              href={prevHref}
-              prefetch
+            <a
+              className={`rounded-lg border px-4 py-2 ${page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-white"}`}
+              href={`/teachers?${new URLSearchParams({
+                ...Object.fromEntries(qsBase.entries()),
+                page: String(page - 1),
+              }).toString()}`}
             >
               Previous
-            </Link>
+            </a>
 
-            <div className="text-neutral-600">Page {page}</div>
+            <div className="text-neutral-600">
+              Page {page} of {Math.ceil(count / pageSize)}
+            </div>
 
-            <Link
-              className={`rounded-lg border px-4 py-2 ${!hasNext ? "pointer-events-none opacity-40" : "hover:bg-white"}`}
-              href={nextHref}
-              prefetch
+            <a
+              className={`rounded-lg border px-4 py-2 ${
+                page >= Math.ceil(count / pageSize) ? "pointer-events-none opacity-40" : "hover:bg-white"
+              }`}
+              href={`/teachers?${new URLSearchParams({
+                ...Object.fromEntries(qsBase.entries()),
+                page: String(page + 1),
+              }).toString()}`}
             >
               Next
-            </Link>
+            </a>
           </div>
         ) : null}
       </div>
