@@ -1,9 +1,10 @@
 // lib/admin/actions.ts
 "use server";
 
+import crypto from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import crypto from "crypto";
+
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import { clearAdminSession, requireAdmin, safeNextPath, setAdminSession } from "./session";
 
@@ -24,8 +25,23 @@ function safeEq(a: string, b: string) {
   return crypto.timingSafeEqual(ab, bb);
 }
 
+// ---------- subjects helpers ----------
+function parseSubjects(raw: string): string[] {
+  // input: "Math, Physics ,  Chemistry"
+  const parts = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  // unique + limit
+  const uniq: string[] = [];
+  for (const p of parts) if (!uniq.includes(p)) uniq.push(p);
+
+  return uniq.slice(0, 20);
+}
+
 // --------------------
-// Auth
+// Admin Auth
 // --------------------
 export async function adminLogin(formData: FormData) {
   const username = str(formData.get("username"));
@@ -50,17 +66,26 @@ export async function adminLogout() {
 }
 
 // --------------------
-// Teachers
+// Teachers (name + subjects[] + subject(primary))
+// form fields: full_name, subjects (comma-separated)
 // --------------------
 export async function adminCreateTeacher(formData: FormData) {
   requireAdmin("/admin/teachers");
+
   const full_name = str(formData.get("full_name"));
-  const subject = str(formData.get("subject")) || null;
+  const subjectsCsv = str(formData.get("subjects"));
 
   if (!full_name) redirect(`/admin/teachers?error=${encodeURIComponent("Name is required.")}`);
 
+  const subjects = parseSubjects(subjectsCsv);
+  const primary = subjects[0] ?? null;
+
   const supabase = createSupabaseAdminClient();
-  const { error } = await supabase.from("teachers").insert({ full_name, subject });
+  const { error } = await supabase.from("teachers").insert({
+    full_name,
+    subject: primary, // keep for compatibility
+    subjects,         // new
+  });
 
   if (error) redirect(`/admin/teachers?error=${encodeURIComponent(error.message)}`);
 
@@ -71,17 +96,32 @@ export async function adminCreateTeacher(formData: FormData) {
 
 export async function adminUpdateTeacher(formData: FormData) {
   requireAdmin("/admin/teachers");
+
   const id = str(formData.get("id"));
   const full_name = str(formData.get("full_name"));
-  const subject = str(formData.get("subject")) || null;
+  const subjectsCsv = str(formData.get("subjects"));
 
   if (!id) redirect(`/admin/teachers?error=${encodeURIComponent("Missing teacher id.")}`);
-  if (!full_name) redirect(`/admin/teachers/${encodeURIComponent(id)}/edit?error=${encodeURIComponent("Name is required.")}`);
+  if (!full_name)
+    redirect(
+      `/admin/teachers/${encodeURIComponent(id)}/edit?error=${encodeURIComponent("Name is required.")}`
+    );
+
+  const subjects = parseSubjects(subjectsCsv);
+  const primary = subjects[0] ?? null;
 
   const supabase = createSupabaseAdminClient();
-  const { error } = await supabase.from("teachers").update({ full_name, subject }).eq("id", id);
+  const { error } = await supabase
+    .from("teachers")
+    .update({
+      full_name,
+      subject: primary, // keep in sync
+      subjects,
+    })
+    .eq("id", id);
 
-  if (error) redirect(`/admin/teachers/${encodeURIComponent(id)}/edit?error=${encodeURIComponent(error.message)}`);
+  if (error)
+    redirect(`/admin/teachers/${encodeURIComponent(id)}/edit?error=${encodeURIComponent(error.message)}`);
 
   revalidatePath("/teachers");
   revalidatePath(`/teachers/${id}`);
@@ -91,6 +131,7 @@ export async function adminUpdateTeacher(formData: FormData) {
 
 export async function adminDeleteTeacher(formData: FormData) {
   requireAdmin("/admin/teachers");
+
   const id = str(formData.get("id"));
   if (!id) redirect(`/admin/teachers?error=${encodeURIComponent("Missing teacher id.")}`);
 
@@ -98,7 +139,7 @@ export async function adminDeleteTeacher(formData: FormData) {
   const { error } = await supabase.from("teachers").delete().eq("id", id);
 
   if (error) {
-    // 常见原因：reviews.teacher_id 有外键限制
+    // typical: foreign key constraint from reviews.teacher_id
     redirect(`/admin/teachers?error=${encodeURIComponent(error.message)}`);
   }
 
@@ -108,10 +149,11 @@ export async function adminDeleteTeacher(formData: FormData) {
 }
 
 // --------------------
-// Reviews (moderation/edit/delete)
+// Reviews (edit/delete)
 // --------------------
 export async function adminUpdateReview(formData: FormData) {
   requireAdmin("/admin/reviews");
+
   const id = str(formData.get("id"));
   const teacher_id = str(formData.get("teacher_id"));
 
@@ -143,15 +185,14 @@ export async function adminUpdateReview(formData: FormData) {
 
   if (error) redirect(`/admin/reviews/${encodeURIComponent(id)}/edit?error=${encodeURIComponent(error.message)}`);
 
-  if (teacher_id) {
-    revalidatePath(`/teachers/${teacher_id}`);
-  }
+  if (teacher_id) revalidatePath(`/teachers/${teacher_id}`);
   revalidatePath("/admin/reviews");
   redirect(`/admin/reviews/${encodeURIComponent(id)}/edit?message=${encodeURIComponent("Saved.")}`);
 }
 
 export async function adminDeleteReview(formData: FormData) {
   requireAdmin("/admin/reviews");
+
   const id = str(formData.get("id"));
   const teacher_id = str(formData.get("teacher_id"));
   if (!id) redirect(`/admin/reviews?error=${encodeURIComponent("Missing review id.")}`);
@@ -167,10 +208,11 @@ export async function adminDeleteReview(formData: FormData) {
 }
 
 // --------------------
-// Tickets (status + reply(admin_note))
+// Tickets (status + reply via admin_note)
 // --------------------
 export async function adminUpdateTicket(formData: FormData) {
   requireAdmin("/admin/tickets");
+
   const id = str(formData.get("id"));
   const status = str(formData.get("status"));
   const admin_note = str(formData.get("admin_note")) || null;
