@@ -3,8 +3,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import HeyMenu from "@/components/HeyMenu";
 import { useEffect, useState } from "react";
+import HeyMenu from "@/components/HeyMenu";
 
 export default function Header({
   heyName,
@@ -27,7 +27,6 @@ export default function Header({
 
   const [q, setQ] = useState(searchDefaultValue ?? params.get("q") ?? "");
 
-  // 让输入框在 back/forward 或外部 push 时同步
   useEffect(() => {
     setQ(searchDefaultValue ?? params.get("q") ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -40,9 +39,8 @@ export default function Header({
     next.delete("page");
     const qs = next.toString();
 
-    // 如果 Header 在 /teachers 上就用当前 pathname，否则用 searchAction
-    const base = pathname.startsWith("/teachers") ? "/teachers" : searchAction;
-    router.push(qs ? `${base}?${qs}` : base);
+    const basePath = pathname.startsWith("/teachers") ? "/teachers" : searchAction;
+    router.push(qs ? `${basePath}?${qs}` : basePath);
   }
 
   return (
