@@ -32,13 +32,24 @@ const GRADE_OPTIONS = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D", "
 
 export default function RateForm({
   teacherId,
-  teacherSubject,
+  teacherSubjects,
 }: {
   teacherId: string;
-  teacherSubject: string | null;
+  teacherSubjects: string[];
 }) {
-  const defaultSubject = (teacherSubject ?? "").trim();
-  const [subject, setSubject] = useState<string>(defaultSubject || "UNKNOWN");
+  const options = useMemo(() => {
+    const cleaned = (teacherSubjects ?? [])
+      .map((s) => (s ?? "").trim())
+      .filter(Boolean);
+
+    // 去重（保留顺序）
+    const uniq: string[] = [];
+    for (const s of cleaned) if (!uniq.includes(s)) uniq.push(s);
+
+    return uniq.length ? uniq : ["UNKNOWN"];
+  }, [teacherSubjects]);
+
+  const [subject, setSubject] = useState<string>(options[0] ?? "UNKNOWN");
 
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [comment, setComment] = useState("");
@@ -64,7 +75,7 @@ export default function RateForm({
       action={(fd) => {
         fd.set("teacherId", teacherId);
 
-        // 为了避免大范围改库/改类型：仍写入 reviews.course 字段，但值为 subject
+        // ✅ 仍写入 reviews.course 字段，但值为选中的 subject（兼容后端/旧字段）
         fd.set("course", subject.trim());
 
         fd.set("grade", grade || "");
@@ -96,12 +107,11 @@ export default function RateForm({
               className="h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:ring"
               required
             >
-              {/* 如果 teacher.subject 为空，仍给一个可提交的兜底值，避免 required 卡死 */}
-              {defaultSubject ? (
-                <option value={defaultSubject}>{defaultSubject}</option>
-              ) : (
-                <option value="UNKNOWN">Unknown</option>
-              )}
+              {options.map((s) => (
+                <option key={s} value={s}>
+                  {s === "UNKNOWN" ? "Unknown" : s}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -208,7 +218,6 @@ export default function RateForm({
         <div className="text-sm font-semibold">
           Write a Review <span className="text-red-600">*</span>
         </div>
-        
 
         <details className="mt-4 rounded-xl border bg-neutral-50 p-4">
           <summary className="cursor-pointer text-sm font-semibold">Guidelines</summary>
