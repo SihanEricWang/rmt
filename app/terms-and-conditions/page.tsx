@@ -18,8 +18,6 @@ export default function TermsAndConditionsPage() {
             <span aria-hidden>←</span>
             Back
           </BackButton>
-
-          </Link>
           <div className="text-xs text-neutral-500">Rate My Teacher · BIPH</div>
         </div>
 
