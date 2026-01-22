@@ -101,13 +101,17 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
 
   const selectedCourse = (searchParams?.course ?? "").trim();
 
+  // ✅ Fetch enough reviews to make the "most upvoted" ordering meaningful,
+  // but cap to keep the RPC payload reasonable.
+  const maxReviewsToFetch = Math.min(Number(teacher.review_count ?? 200) || 200, 1000);
+
   // reviews list
   let reviewsQuery = supabase
     .from("reviews")
     .select("id, quality, difficulty, would_take_again, comment, tags, course, created_at")
     .eq("teacher_id", teacherId)
     .order("created_at", { ascending: false })
-    .limit(25);
+    .limit(maxReviewsToFetch);
 
   if (selectedCourse) reviewsQuery = reviewsQuery.eq("course", selectedCourse);
 
@@ -125,6 +129,19 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
       up: Number(row.upvotes ?? 0),
       down: Number(row.downvotes ?? 0),
     });
+  });
+
+  // ✅ Sort reviews by most upvotes (likes) first.
+  // Tie-breakers: fewer downvotes, then newest first.
+  const sortedReviews = (reviews ?? []).slice().sort((a: any, b: any) => {
+    const aKey = String(a.id);
+    const bKey = String(b.id);
+    const aCounts = countsByReview.get(aKey) ?? { up: 0, down: 0 };
+    const bCounts = countsByReview.get(bKey) ?? { up: 0, down: 0 };
+
+    if (bCounts.up !== aCounts.up) return bCounts.up - aCounts.up;
+    if (aCounts.down !== bCounts.down) return aCounts.down - bCounts.down;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
   const myVoteByReview = new Map<string, 1 | -1>();
@@ -297,10 +314,10 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
           ) : null}
 
           <div className="mt-6 space-y-6">
-            {(reviews ?? []).length === 0 ? (
+            {sortedReviews.length === 0 ? (
               <div className="rounded-2xl border bg-white p-8 text-sm text-neutral-700">No reviews yet.</div>
             ) : (
-              (reviews ?? []).map((r) => {
+              sortedReviews.map((r) => {
                 const key = String(r.id);
                 const voteCounts = countsByReview.get(key) ?? { up: 0, down: 0 };
                 const myVote = (myVoteByReview.get(key) ?? 0) as 1 | -1 | 0;
@@ -362,8 +379,6 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
             )}
           </div>
 
-          {/* ✅ Removed: embedded "Rate this teacher" form card.
-              Instead, provide a simple CTA button to go to the dedicated rate page. */}
           <div className="mt-10 flex justify-center">
             <a
               href={rateHref}
