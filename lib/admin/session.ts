@@ -8,7 +8,7 @@ const COOKIE_NAME = "rmt_admin";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 type AdminSessionPayload = {
-  u: string;
+  u: string; // username
   iat: number;
   exp: number;
 };
@@ -20,7 +20,11 @@ function mustGetEnv(name: string): string {
 }
 
 function base64urlEncode(buf: Buffer) {
-  return buf.toString("base64").replaceAll("=", "").replaceAll("+", "-").replaceAll("/", "_");
+  return buf
+    .toString("base64")
+    .replaceAll("=", "")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_");
 }
 
 function base64urlDecode(s: string) {
@@ -40,7 +44,12 @@ function timingSafeEqual(a: Buffer, b: Buffer) {
 
 export function createAdminToken(username: string) {
   const now = Math.floor(Date.now() / 1000);
-  const payload: AdminSessionPayload = { u: username, iat: now, exp: now + MAX_AGE_SECONDS };
+  const payload: AdminSessionPayload = {
+    u: username,
+    iat: now,
+    exp: now + MAX_AGE_SECONDS,
+  };
+
   const body = base64urlEncode(Buffer.from(JSON.stringify(payload), "utf-8"));
   const sig = base64urlEncode(hmacSha256(mustGetEnv("ADMIN_COOKIE_SECRET"), body));
   return `${body}.${sig}`;
@@ -48,11 +57,14 @@ export function createAdminToken(username: string) {
 
 export function verifyAdminToken(token: string | undefined | null): AdminSessionPayload | null {
   if (!token) return null;
+
   const parts = token.split(".");
   if (parts.length !== 2) return null;
 
   const [body, sig] = parts;
   const expected = base64urlEncode(hmacSha256(mustGetEnv("ADMIN_COOKIE_SECRET"), body));
+
+  // avoid timing attacks
   if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
 
   try {
@@ -66,6 +78,7 @@ export function verifyAdminToken(token: string | undefined | null): AdminSession
   }
 }
 
+/** Protect admin pages: if not logged in, redirect to /admin/login */
 export function requireAdmin(nextPath?: string) {
   const token = cookies().get(COOKIE_NAME)?.value;
   const payload = verifyAdminToken(token);
@@ -97,6 +110,7 @@ export function clearAdminSession() {
   });
 }
 
+/** Prevent open redirect: only allow /admin* relative paths */
 export function safeNextPath(p: string, fallback = "/admin/teachers") {
   const s = (p || "").trim();
   if (!s.startsWith("/")) return fallback;
