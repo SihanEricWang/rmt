@@ -9,10 +9,11 @@ function mustGetEnv(name: string): string {
 }
 
 export function createSupabaseAdminClient() {
-  return createClient(mustGetEnv("NEXT_PUBLIC_SUPABASE_URL"), mustGetEnv("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+  return createClient(
+    mustGetEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustGetEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }
+  );
 }
