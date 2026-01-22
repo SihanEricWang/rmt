@@ -1,4 +1,5 @@
 // app/page.tsx
+import Link from "next/link";
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-white">
@@ -36,9 +37,10 @@ export default function HomePage() {
 
           {/* No search box — button instead */}
           <div className="mt-10 w-full max-w-2xl">
-            <a
+            <Link
               href="/teachers"
               className="group relative flex h-14 w-full items-center justify-center rounded-full bg-white/95 px-6 text-sm font-semibold text-black shadow-lg ring-1 ring-white/20 hover:bg-white"
+              prefetch
             >
               <span>Enter Rate My Teacher</span>
               <span className="ml-2 opacity-70 group-hover:opacity-100">→</span>
@@ -46,7 +48,7 @@ export default function HomePage() {
               <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs text-white/80">
                 Click to view teachers and ratings (sign in to post)
               </span>
-            </a>
+            </Link>
           </div>
 
           {/* scroll hint */}
@@ -77,7 +79,7 @@ export default function HomePage() {
             <span className="font-semibold">Rate My Teacher</span> is a school-only rating site built specifically for{" "}
             <span className="font-semibold">BIPH</span>. Browse teacher pages freely, and sign in with your{" "}
             <span className="font-mono">@basischina.com</span> email to post ratings and tags.{" "}
-            <span className="font-semibold">This is an anonymous student-operated website. Feel FREE to speak anything.</span>
+            <span className="font-semibold">This is an anonymous student-operated website. Feel free to speak.</span>
           </p>
         </div>
 
