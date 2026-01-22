@@ -1,6 +1,7 @@
-// components/ReviewVoteButtons.tsx
+// components/ReviewVoteButtons.tsx (只替换未登录分支即可；给你整文件版更省事)
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setReviewVote } from "@/lib/actions";
@@ -24,6 +25,7 @@ export default function ReviewVoteButtons({
   const [pending, startTransition] = useTransition();
 
   const redirectTo = `/teachers/${teacherId}#ratings`;
+  const loginHref = `/login?redirectTo=${encodeURIComponent(redirectTo)}`;
 
   function submit(op: "up" | "down" | "clear") {
     const fd = new FormData();
@@ -33,25 +35,27 @@ export default function ReviewVoteButtons({
 
     startTransition(async () => {
       await setReviewVote(fd);
-      router.refresh(); // pull fresh counts + myVote
+      router.refresh();
     });
   }
 
   if (!isAuthed) {
     return (
       <div className="mt-4 flex items-center gap-5 text-sm text-neutral-600">
-        <a
+        <Link
           className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-neutral-50"
-          href={`/login?redirectTo=${encodeURIComponent(redirectTo)}`}
+          href={loginHref}
+          prefetch
         >
           👍 <span className="font-semibold">{upvotes}</span>
-        </a>
-        <a
+        </Link>
+        <Link
           className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-neutral-50"
-          href={`/login?redirectTo=${encodeURIComponent(redirectTo)}`}
+          href={loginHref}
+          prefetch
         >
           👎 <span className="font-semibold">{downvotes}</span>
-        </a>
+        </Link>
         <span className="text-xs text-neutral-500">(Sign in to vote)</span>
       </div>
     );
