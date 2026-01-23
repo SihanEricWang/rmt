@@ -3,9 +3,13 @@
 ## Time Line
 ### Jan 23
 Alpha version
+
 Teacher list still pending
+
 Test website and give feedback here
+
 1.
+
 2.
 
 ### Jan 20
