@@ -56,7 +56,13 @@ type TeacherRow = {
   avg_difficulty: number | null;
 };
 
-type DistRow = { q5: number | null; q4: number | null; q3: number | null; q2: number | null; q1: number | null };
+type DistRow = {
+  q5: number | null;
+  q4: number | null;
+  q3: number | null;
+  q2: number | null;
+  q1: number | null;
+};
 
 type TagRow = { tag: string | null; cnt: number | null };
 type CourseRow = { course: string | null };
@@ -142,16 +148,15 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
     1: dist?.q1 ?? 0,
   };
 
-  const totalRatings =
-    (teacher.review_count ?? 0) || Object.values(counts).reduce((a, b) => a + b, 0);
+  const totalRatings = (teacher.review_count ?? 0) || Object.values(counts).reduce((a, b) => a + b, 0);
 
   // Top tags
   const topTags = topTagsRows.map((r) => String(r.tag ?? "")).filter(Boolean);
 
   // Course dropdown options (dedupe + sort)
-  const courseOptions = Array.from(
-    new Set(courseRows.map((r) => r.course).filter(Boolean) as string[])
-  ).sort((a, b) => a.localeCompare(b));
+  const courseOptions = Array.from(new Set(courseRows.map((r) => r.course).filter(Boolean) as string[])).sort((a, b) =>
+    a.localeCompare(b)
+  );
 
   // Votes (counts + my vote)
   const reviewIds = reviews.map((r) => r.id);
@@ -162,11 +167,7 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
       : Promise.resolve({ data: [] as any[] }),
 
     isAuthed && reviewIds.length > 0
-      ? supabase
-          .from("review_votes")
-          .select("review_id,vote")
-          .in("review_id", reviewIds)
-          .eq("user_id", userData.user!.id)
+      ? supabase.from("review_votes").select("review_id,vote").in("review_id", reviewIds).eq("user_id", userData.user!.id)
       : Promise.resolve({ data: [] as any[] }),
   ]);
 
@@ -210,9 +211,7 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
 
       <div className="mx-auto max-w-6xl px-4 py-10">
         {searchParams?.error ? (
-          <div className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800">
-            {searchParams.error}
-          </div>
+          <div className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800">{searchParams.error}</div>
         ) : null}
 
         {/* TOP GRID */}
@@ -228,9 +227,7 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
 
             <div className="mt-3 text-sm font-semibold text-neutral-800">
               Overall Quality Based on{" "}
-              <span className="underline underline-offset-2 decoration-neutral-300">
-                {teacher.review_count ?? 0} ratings
-              </span>
+              <span className="underline underline-offset-2 decoration-neutral-300">{teacher.review_count ?? 0} ratings</span>
             </div>
 
             <div className="mt-6 flex items-start justify-between gap-4">
@@ -238,19 +235,12 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
                 <div className="text-5xl font-extrabold tracking-tight">{teacher.full_name}</div>
                 <div className="mt-3 text-sm text-neutral-800">
                   Teacher in the{" "}
-                  <span className="font-semibold underline underline-offset-2">
-                    {teacher.subject ?? "—"}
-                  </span>{" "}
-                  department at{" "}
+                  <span className="font-semibold underline underline-offset-2">{teacher.subject ?? "—"}</span> department at{" "}
                   <span className="font-semibold underline underline-offset-2">BIPH</span>
                 </div>
               </div>
 
-              <button
-                className="mt-2 rounded-lg p-2 hover:bg-neutral-100"
-                aria-label="Bookmark"
-                type="button"
-              >
+              <button className="mt-2 rounded-lg p-2 hover:bg-neutral-100" aria-label="Bookmark" type="button">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="opacity-70">
                   <path
                     d="M6 3h12a1 1 0 011 1v18l-7-4-7 4V4a1 1 0 011-1z"
@@ -339,11 +329,7 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
           <div className="text-lg font-semibold">{teacher.review_count ?? 0} Student Ratings</div>
 
           {/* Course filter */}
-          <form
-            action={`/teachers/${teacherId}#ratings`}
-            method="get"
-            className="mt-4 flex w-full max-w-sm items-center gap-2"
-          >
+          <form action={`/teachers/${teacherId}#ratings`} method="get" className="mt-4 flex w-full max-w-sm items-center gap-2">
             <select
               name="course"
               defaultValue={selectedCourse || ""}
@@ -379,9 +365,10 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
 
                 return (
                   <div key={key} className="rounded-2xl border bg-white shadow-sm">
-                    <div className="flex gap-6 p-6">
+                    {/* ✅ UPDATED: make columns stretch + pin voting to bottom */}
+                    <div className="flex items-stretch gap-6 p-6">
                       {/* left quality + difficulty boxes */}
-                      <div className="w-28 shrink-0 text-center space-y-4">
+                      <div className="w-28 shrink-0 text-center flex flex-col justify-between">
                         {/* QUALITY */}
                         <div>
                           <div className="text-xs font-semibold tracking-wide text-neutral-700">QUALITY</div>
@@ -389,7 +376,7 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
                             <div className="text-4xl font-extrabold leading-none">{fmt1(r.quality)}</div>
                           </div>
                         </div>
-                      
+
                         {/* DIFFICULTY (always gray) */}
                         <div>
                           <div className="text-xs font-semibold tracking-wide text-neutral-700">DIFFICULTY</div>
@@ -399,47 +386,48 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
                         </div>
                       </div>
 
-
                       {/* content */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="text-sm font-extrabold tracking-wide text-neutral-900">
-                            {r.course ? String(r.course).toUpperCase() : "—"}
+                      <div className="min-w-0 flex-1 flex flex-col">
+                        {/* main content */}
+                        <div>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="text-sm font-extrabold tracking-wide text-neutral-900">
+                              {r.course ? String(r.course).toUpperCase() : "—"}
+                            </div>
+                            <div className="text-sm text-neutral-500">{formatDate(r.created_at)}</div>
                           </div>
-                          <div className="text-sm text-neutral-500">{formatDate(r.created_at)}</div>
+
+                          <div className="mt-2 text-sm text-neutral-800">
+                            <span className="font-semibold">Would take again:</span> {r.would_take_again ? "Yes" : "No"}
+                          </div>
+
+                          {Array.isArray(r.tags) && r.tags.length > 0 ? (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {r.tags.map((t) => (
+                                <span
+                                  key={t}
+                                  className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-800"
+                                >
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          {r.comment ? <p className="mt-4 whitespace-pre-wrap text-sm text-neutral-800">{r.comment}</p> : null}
                         </div>
 
-                        <div className="mt-2 text-sm text-neutral-800">
-                          <span className="font-semibold">Would take again:</span>{" "}
-                          {r.would_take_again ? "Yes" : "No"}
-                          
+                        {/* Vote area pinned to bottom */}
+                        <div className="mt-auto pt-4">
+                          <ReviewVoteButtons
+                            teacherId={teacherId}
+                            reviewId={key}
+                            upvotes={voteCounts.up}
+                            downvotes={voteCounts.down}
+                            myVote={myVote}
+                            isAuthed={isAuthed}
+                          />
                         </div>
-
-                        {Array.isArray(r.tags) && r.tags.length > 0 ? (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {r.tags.map((t) => (
-                              <span
-                                key={t}
-                                className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-800"
-                              >
-                                {t}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-
-                        {r.comment ? (
-                          <p className="mt-4 whitespace-pre-wrap text-sm text-neutral-800">{r.comment}</p>
-                        ) : null}
-
-                        <ReviewVoteButtons
-                          teacherId={teacherId}
-                          reviewId={key}
-                          upvotes={voteCounts.up}
-                          downvotes={voteCounts.down}
-                          myVote={myVote}
-                          isAuthed={isAuthed}
-                        />
                       </div>
                     </div>
                   </div>
