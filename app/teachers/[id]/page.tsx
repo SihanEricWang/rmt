@@ -380,15 +380,25 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
                 return (
                   <div key={key} className="rounded-2xl border bg-white shadow-sm">
                     <div className="flex gap-6 p-6">
-                      {/* left quality box */}
-                      <div className="w-28 shrink-0 text-center">
-                        <div className="text-xs font-semibold tracking-wide text-neutral-700">QUALITY</div>
-                        <div className={`mt-2 rounded-xl px-3 py-5 ${ratingClass(r.quality)}`}>
-                          <div className="text-4xl font-extrabold leading-none">
-                            {Number(r.quality ?? 0).toFixed(1)}
+                      {/* left quality + difficulty boxes */}
+                      <div className="w-28 shrink-0 text-center space-y-4">
+                        {/* QUALITY */}
+                        <div>
+                          <div className="text-xs font-semibold tracking-wide text-neutral-700">QUALITY</div>
+                          <div className={`mt-2 rounded-xl px-3 py-5 ${ratingClass(r.quality)}`}>
+                            <div className="text-4xl font-extrabold leading-none">{fmt1(r.quality)}</div>
+                          </div>
+                        </div>
+                      
+                        {/* DIFFICULTY (always gray) */}
+                        <div>
+                          <div className="text-xs font-semibold tracking-wide text-neutral-700">DIFFICULTY</div>
+                          <div className="mt-2 rounded-xl bg-neutral-200 px-3 py-5 text-neutral-900">
+                            <div className="text-4xl font-extrabold leading-none">{fmt1(r.difficulty)}</div>
                           </div>
                         </div>
                       </div>
+
 
                       {/* content */}
                       <div className="min-w-0 flex-1">
@@ -402,8 +412,7 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
                         <div className="mt-2 text-sm text-neutral-800">
                           <span className="font-semibold">Would take again:</span>{" "}
                           {r.would_take_again ? "Yes" : "No"}
-                          <span className="mx-2 text-neutral-300">|</span>
-                          <span className="font-semibold">Difficulty:</span> {r.difficulty}/5
+                          
                         </div>
 
                         {Array.isArray(r.tags) && r.tags.length > 0 ? (
