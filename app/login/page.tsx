@@ -1,15 +1,11 @@
-// app/login/page.tsx
-import Link from "next/link";
+"use client";
+
+import * as React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useFormStatus } from "react-dom";
 import { signInWithPassword, signUpWithEmailAndPassword } from "@/lib/actions";
 
-type LoginPageProps = {
-  searchParams?: {
-    message?: string;
-    error?: string;
-    redirectTo?: string;
-    mode?: string; // "signin" | "signup"
-  };
-};
+type Mode = "signin" | "signup";
 
 function Alert({ kind, text }: { kind: "error" | "message"; text: string }) {
   const base = "w-full rounded-lg border px-4 py-3 text-sm leading-5";
@@ -21,30 +17,94 @@ function Alert({ kind, text }: { kind: "error" | "message"; text: string }) {
   return <div className={cls}>{text}</div>;
 }
 
-function pickMode(searchParams?: LoginPageProps["searchParams"]) {
-  const modeRaw = (searchParams?.mode ?? "").toLowerCase();
+/**
+ * ✅ 防 open-redirect：只允许站内相对路径
+ * - 必须以 "/" 开头
+ * - 不能以 "//" 开头（协议相对地址）
+ * - 不能包含 "://"
+ */
+function sanitizeRedirectTo(value: string | null | undefined, fallback = "/teachers") {
+  const v = (value ?? "").trim();
+  if (!v) return fallback;
+  if (!v.startsWith("/")) return fallback;
+  if (v.startsWith("//")) return fallback;
+  if (v.includes("://")) return fallback;
+  return v;
+}
+
+function pickModeFromParams(sp: URLSearchParams): Mode {
+  const modeRaw = (sp.get("mode") ?? "").toLowerCase();
   if (modeRaw === "signup" || modeRaw === "register") return "signup";
   if (modeRaw === "signin" || modeRaw === "login") return "signin";
 
-  const error = (searchParams?.error ?? "").toLowerCase();
-  // 这些错误更像是注册流程产生的
+  const error = (sp.get("error") ?? "").toLowerCase();
+  // 这些错误更像是注册流程产生的（保留你的逻辑，但更稳健）
   if (error.includes("do not match") || error.includes("match") || error.includes("at least 8")) return "signup";
 
-  // 默认登录
   return "signin";
 }
 
-export default function LoginPage({ searchParams }: LoginPageProps) {
-  const message = searchParams?.message;
-  const error = searchParams?.error;
+function SubmitButton({
+  idleText,
+  pendingText,
+  variant = "primary",
+}: {
+  idleText: string;
+  pendingText: string;
+  variant?: "primary" | "secondary";
+}) {
+  const { pending } = useFormStatus();
+
+  const base =
+    "w-full rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60";
+  const cls =
+    variant === "primary"
+      ? `${base} bg-black text-white hover:opacity-90`
+      : `${base} border bg-white hover:bg-neutral-50`;
+
+  return (
+    <button type="submit" className={cls} disabled={pending} aria-busy={pending}>
+      {pending ? pendingText : idleText}
+    </button>
+  );
+}
+
+export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const message = searchParams.get("message") ?? undefined;
+  const error = searchParams.get("error") ?? undefined;
 
   // ✅ important: allow redirect back to the page that required auth
-  const redirectTo = searchParams?.redirectTo ?? "/teachers";
+  const redirectTo = sanitizeRedirectTo(searchParams.get("redirectTo"), "/teachers");
 
-  const mode = pickMode(searchParams);
+  // ✅ 前端模式：切换 tab 立即响应，不依赖整页路由切换
+  const [mode, setMode] = React.useState<Mode>(() => pickModeFromParams(searchParams));
 
-  const signinHref = `/login?mode=signin&redirectTo=${encodeURIComponent(redirectTo)}`;
-  const signupHref = `/login?mode=signup&redirectTo=${encodeURIComponent(redirectTo)}`;
+  // 当 URL 的 mode 被外部改变（例如复制链接/后退前进）时，同步本地状态
+  React.useEffect(() => {
+    const nextMode = pickModeFromParams(searchParams);
+    setMode(nextMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.toString()]);
+
+  // ✅ 切换 tab：立即 setState，同时仅同步 URL（replace 不产生历史堆栈污染）
+  const updateUrlMode = React.useCallback(
+    (nextMode: Mode) => {
+      const next = new URLSearchParams(searchParams.toString());
+      next.set("mode", nextMode);
+      next.set("redirectTo", redirectTo);
+      router.replace(`/login?${next.toString()}`, { scroll: false });
+    },
+    [router, searchParams, redirectTo]
+  );
+
+  const onClickTab = (nextMode: Mode) => {
+    if (nextMode === mode) return;
+    setMode(nextMode);
+    updateUrlMode(nextMode);
+  };
 
   return (
     <main className="min-h-screen bg-neutral-50">
@@ -70,8 +130,9 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
             {/* Tabs */}
             <div className="mb-6">
               <div className="inline-flex w-full rounded-full bg-neutral-100 p-1">
-                <Link
-                  href={signinHref}
+                <button
+                  type="button"
+                  onClick={() => onClickTab("signin")}
                   className={[
                     "flex-1 rounded-full px-4 py-2 text-center text-sm font-semibold transition",
                     mode === "signin" ? "bg-white shadow-sm" : "text-neutral-600 hover:text-neutral-900",
@@ -79,10 +140,11 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
                   aria-current={mode === "signin" ? "page" : undefined}
                 >
                   Sign in
-                </Link>
+                </button>
 
-                <Link
-                  href={signupHref}
+                <button
+                  type="button"
+                  onClick={() => onClickTab("signup")}
                   className={[
                     "flex-1 rounded-full px-4 py-2 text-center text-sm font-semibold transition",
                     mode === "signup" ? "bg-white shadow-sm" : "text-neutral-600 hover:text-neutral-900",
@@ -90,7 +152,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
                   aria-current={mode === "signup" ? "page" : undefined}
                 >
                   Create account
-                </Link>
+                </button>
               </div>
 
               <p className="mt-3 text-sm text-neutral-600">
@@ -115,6 +177,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
                       placeholder="name@basischina.com"
                       autoComplete="email"
                       required
+                      inputMode="email"
                       className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring"
                     />
                   </label>
@@ -131,12 +194,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
                     />
                   </label>
 
-                  <button
-                    type="submit"
-                    className="w-full rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-                  >
-                    Sign in
-                  </button>
+                  <SubmitButton idleText="Sign in" pendingText="Signing in..." variant="primary" />
 
                   <p className="text-xs text-neutral-500">
                     If you just created an account, verify your email first, then sign in.
@@ -146,6 +204,9 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
             ) : (
               <section>
                 <form action={signUpWithEmailAndPassword} className="space-y-4">
+                  {/* ✅ redirect after sign-up / verification flow consistency */}
+                  <input type="hidden" name="redirectTo" value={redirectTo} />
+
                   <label className="block">
                     <span className="text-sm font-medium">Email</span>
                     <input
@@ -154,6 +215,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
                       placeholder="name@basischina.com"
                       autoComplete="email"
                       required
+                      inputMode="email"
                       className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring"
                     />
                   </label>
@@ -184,12 +246,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
                     />
                   </label>
 
-                  <button
-                    type="submit"
-                    className="w-full rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-neutral-50"
-                  >
-                    Create account
-                  </button>
+                  <SubmitButton idleText="Create account" pendingText="Creating..." variant="secondary" />
 
                   <p className="text-xs text-neutral-500">
                     After verifying your email, come back and sign in to post reviews.
@@ -199,9 +256,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
             )}
           </div>
 
-          <p className="mt-6 text-xs text-neutral-500">
-            Your ratings are always anonymous.
-          </p>
+          <p className="mt-6 text-xs text-neutral-500">Your ratings are always anonymous.</p>
         </div>
       </div>
     </main>
