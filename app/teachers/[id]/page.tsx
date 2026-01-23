@@ -404,7 +404,7 @@ export default async function TeacherPage({ params, searchParams }: PageProps) {
                         {/* 上半部分：标题/信息/标签/评论 */}
                         <div>
                           <div className="flex items-start justify-between gap-4">
-                            <div className="text-sm font-extrabold tracking-wide text-neutral-900">
+                            <div className="text-base font-extrabold tracking-wide text-neutral-900">
                               {r.course ? String(r.course).toUpperCase() : "—"}
                             </div>
                             <div className="text-sm text-neutral-500">{formatDate(r.created_at)}</div>
