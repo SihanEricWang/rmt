@@ -102,7 +102,6 @@ export default async function ContactPage({
           </BackButton>
 
           <div className="text-xs text-neutral-500">Rate My Teacher · BIPH</div>
-        </div>
 
         <h1 className="text-3xl font-extrabold tracking-tight">Contact Us</h1>
         <p className="mt-2 text-sm text-neutral-700">Submit a ticket for help, partnerships, or suggestions. </p>
